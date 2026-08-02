@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../config/app_theme.dart';
 
-class VendorDashboardScreen extends StatefulWidget {
+class ChannelPartnerDashboardScreen extends StatefulWidget {
   const VendorDashboardScreen({Key? key}) : super(key: key);
 
   @override
-  State<VendorDashboardScreen> createState() => _VendorDashboardScreenState();
+  State<ChannelPartnerDashboardScreen> createState() => _VendorDashboardScreenState();
 }
 
-class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
+_ChannelPartnerDashboardScreenState extends State<ChannelPartnerDashboardScreen> {
   int _selectedTab = 0;
   int _footerSelectedIndex = 0;
   bool _isOnline = false;
@@ -166,10 +166,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _buildVendorNavItem('🏠', 'Home', 0),
-            _buildVendorNavItem('🏢', 'Societies', 1),
-            _buildVendorNavItem('📊', 'Earnings', 2),
-            _buildVendorNavItem('👤', 'Profile', 3),
+            _buildChannelPartnerNavItem('🏠', 'Home', 0),
+            _buildChannelPartnerNavItem('🏢', 'Societies', 1),
+            _buildChannelPartnerNavItem('📊', 'Earnings', 2),
+            _buildChannelPartnerNavItem('👤', 'Profile', 3),
           ],
         ),
       ),
@@ -1099,7 +1099,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
     );
   }
 
-  Widget _buildVendorNavItem(String emoji, String label, int index) {
+  Widget _buildChannelPartnerNavItem(String emoji, String label, int index) {
     final isActive = _selectedTab == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedTab = index),

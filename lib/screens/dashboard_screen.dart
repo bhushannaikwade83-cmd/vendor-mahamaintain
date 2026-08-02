@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'vendor_dashboard_screen.dart';
+import 'channel_partner_dashboard_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userRole;
@@ -18,7 +18,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
-    // Vendor app only shows vendor dashboard
-    return const VendorDashboardScreen();
+    // Channel Partner app only shows channel partner dashboard
+    return const ChannelPartnerDashboardScreen();
   }
 }

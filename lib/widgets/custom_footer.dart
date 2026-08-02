@@ -4,7 +4,7 @@ import '../config/app_theme.dart';
 class CustomFooter extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onNavItemTap;
-  final String? userRole; // 'vendor' or 'user'
+  final String? userRole; // 'vendor' or 'user' or 'channel_partner'
 
   const CustomFooter({
     required this.selectedIndex,
@@ -45,14 +45,14 @@ class CustomFooter extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: userRole == 'vendor'
             ? [
-                // Vendor tabs: Home, Societies, Earnings, Profile
+                // Channel Partner tabs: Home, Societies, Earnings, Profile
                 _buildNavItem(context, '🏠', 'Home', 0),
                 _buildNavItem(context, '🏢', 'Societies', 1),
                 _buildNavItem(context, '💰', 'Earnings', 2),
                 _buildNavItem(context, '👤', 'Profile', 3),
               ]
             : [
-                // User tabs: Home, SOS, AI Chat, Profile
+                // User tabs: Home, SOS, AI Chat, Profile (for Individual & Society users)
                 _buildNavItem(context, '🏠', 'Home', 0),
                 _buildNavItem(context, '🆘', 'SOS', 1),
                 _buildNavItem(context, '🤖', 'AI Chat', 2),
