@@ -164,7 +164,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(28),
                                 child: Image.asset(
-                                  'images/logo.jpeg',
+                                  'assets/images/logo.jpeg',
                                   width: isSmall ? 120 : 150,
                                   height: isSmall ? 120 : 150,
                                   fit: BoxFit.cover,
@@ -193,7 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             text: TextSpan(
                               children: [
                                 TextSpan(
-                                  text: 'MahaMaintain\n',
+                                  text: 'Channel\n',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: isSmall ? 26 : 32,
@@ -203,7 +203,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   ),
                                 ),
                                 TextSpan(
-                                  text: 'Pro',
+                                  text: 'Partners',
                                   style: TextStyle(
                                     color: const Color(0xFFFFD700),
                                     fontSize: isSmall ? 26 : 32,

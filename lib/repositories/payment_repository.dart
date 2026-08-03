@@ -39,7 +39,7 @@ class PaymentRepository {
     var options = {
       'key': razorpayKeyId,
       'amount': amount,
-      'name': 'MahaMaintain Pro',
+      'name': 'Channel Partners',
       'description': description,
       'currency': 'INR',
       'prefill': {

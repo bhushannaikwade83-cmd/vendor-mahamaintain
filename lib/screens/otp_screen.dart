@@ -169,7 +169,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                         ),
                         SizedBox(height: isSmall ? 16 : 20),
                         Text(
-                          'MahaMaintain',
+                          'Channel',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: isSmall ? 24 : 28,
@@ -178,7 +178,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                           ),
                         ),
                         Text(
-                          'Pro',
+                          'Partners',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: isSmall ? 24 : 28,

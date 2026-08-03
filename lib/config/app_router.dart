@@ -2,7 +2,9 @@ import 'package:go_router/go_router.dart';
 import '../repositories/auth_repository.dart';
 import '../screens/login_screen.dart';
 import '../screens/otp_screen.dart';
+import '../screens/onboarding_screen.dart';
 import '../screens/dashboard_screen.dart';
+import '../state/partner_app_state.dart';
 
 class AppRouter {
   static String? _currentPhoneForOtp;
@@ -20,9 +22,17 @@ class AppRouter {
           return null;
         }
 
-        // If authenticated, go to dashboard
+        // If authenticated, go to onboarding (first login) or dashboard
         if (isAuthenticated) {
-          return '/dashboard';
+          if (!partnerAppState.onboardingCompleted &&
+              state.matchedLocation != '/onboarding') {
+            return '/onboarding';
+          }
+          if (partnerAppState.onboardingCompleted &&
+              state.matchedLocation == '/onboarding') {
+            return '/dashboard';
+          }
+          return null;
         }
 
         // If not authenticated, go to login
@@ -54,6 +64,15 @@ class AppRouter {
             },
             onBackPress: () {
               context.go('/login');
+            },
+          ),
+        ),
+        GoRoute(
+          path: '/onboarding',
+          name: 'onboarding',
+          builder: (context, state) => OnboardingScreen(
+            onDone: () {
+              context.go('/dashboard');
             },
           ),
         ),

@@ -1,6 +1,6 @@
 {
-    "name": "maha_vendor",
-    "short_name": "maha_vendor",
+    "name": "Channel Partners",
+    "short_name": "Channel Partners",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -44,7 +44,7 @@ class _MahaMaintainVendorAppState extends ConsumerState<MahaMaintainVendorApp> {
   Widget build(BuildContext context) {
     if (_showSplash) {
       return MaterialApp(
-        title: 'MahaMaintain Pro - Channel Partners',
+        title: 'Channel Partners',
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
         themeMode: ThemeMode.light,
@@ -63,7 +63,7 @@ class _MahaMaintainVendorAppState extends ConsumerState<MahaMaintainVendorApp> {
     final router = AppRouter.createRouter(authRepository);
 
     return MaterialApp.router(
-      title: 'MahaMaintain Pro - Channel Partners',
+      title: 'Channel Partners',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.light,

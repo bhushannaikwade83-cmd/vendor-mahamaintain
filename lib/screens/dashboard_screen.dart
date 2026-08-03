@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'channel_partner_dashboard_screen.dart';
+import 'partner_dashboard.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userRole;
@@ -18,7 +18,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
-    // Channel Partner app only shows channel partner dashboard
-    return const ChannelPartnerDashboardScreen();
+    return const PartnerDashboard();
   }
 }

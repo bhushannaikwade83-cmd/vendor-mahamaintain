@@ -129,7 +129,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ClipRRect(
                       borderRadius: BorderRadius.circular(32),
                       child: Image.asset(
-                        'images/logo.jpeg',
+                        'assets/images/logo.jpeg',
                         width: 180,
                         height: 180,
                         fit: BoxFit.cover,
@@ -154,7 +154,7 @@ class _SplashScreenState extends State<SplashScreen>
 
                     // Title
                     const Text(
-                      'MahaMaintain',
+                      'Channel',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 32,
@@ -166,7 +166,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const SizedBox(height: 4),
 
                     const Text(
-                      'Pro',
+                      'Partners',
                       style: TextStyle(
                         color: Color(0xFFFFD700),
                         fontSize: 32,
