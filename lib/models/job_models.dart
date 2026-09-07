@@ -1,5 +1,7 @@
 enum JobStatus { newJob, accepted, inProgress, completed, cancelled }
 
+enum BookingType { instant, slot }
+
 JobStatus jobStatusFromString(String s) {
   switch (s) {
     case 'new':
@@ -16,6 +18,10 @@ JobStatus jobStatusFromString(String s) {
   return JobStatus.newJob;
 }
 
+BookingType bookingTypeFromString(String s) {
+  return s.toUpperCase() == 'SLOT' ? BookingType.slot : BookingType.instant;
+}
+
 class Job {
   final int id;
   final String customer;
@@ -30,12 +36,14 @@ class Job {
   final String notes;
   final String distance;
   final String paymentMode;
+  final BookingType bookingType;
   int? rating;
   String? beforePhoto;
   String? afterPhoto;
   String? otp;
   final double? latitude;
   final double? longitude;
+  double? customerRating;
 
   Job({
     required this.id,
@@ -51,12 +59,14 @@ class Job {
     this.notes = '',
     required this.distance,
     required this.paymentMode,
+    this.bookingType = BookingType.instant,
     this.rating,
     this.beforePhoto,
     this.afterPhoto,
     this.otp,
     this.latitude,
     this.longitude,
+    this.customerRating,
   });
 
   String get timeShort {
@@ -81,11 +91,13 @@ class Job {
       notes: (json['notes'] as String?) ?? '',
       distance: '',
       paymentMode: (json['payment_mode'] as String?) ?? '',
+      bookingType: bookingTypeFromString((json['booking_type'] as String?) ?? 'INSTANT'),
       rating: json['rating'] as int?,
       beforePhoto: json['before_photo_url'] as String?,
       afterPhoto: json['after_photo_url'] as String?,
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
+      customerRating: (json['customer_rating'] as num?)?.toDouble(),
     );
   }
 }
