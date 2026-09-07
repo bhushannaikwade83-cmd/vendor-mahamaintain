@@ -2,15 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_theme.dart';
 import '../main.dart' show authRepositoryProvider;
+import '../repositories/auth_repository.dart';
+import '../widgets/app_toast.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   final VoidCallback onOtpSent;
   final Function(String) onOtpPhoneChange;
+  final void Function(String phoneNumber) onNeedsMpin;
   final VoidCallback? onBackPress;
 
   const LoginScreen({
     required this.onOtpSent,
     required this.onOtpPhoneChange,
+    required this.onNeedsMpin,
     this.onBackPress,
     Key? key,
   }) : super(key: key);
@@ -21,13 +25,13 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   bool _isLoading = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  bool _emailFocused = false;
-  final FocusNode _emailFocus = FocusNode();
+  bool _phoneFocused = false;
+  final FocusNode _phoneFocus = FocusNode();
   String? _userRole;
   DateTime? _logoTapDownTime;
 
@@ -46,16 +50,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
         );
     _animationController.forward();
-    _emailFocus.addListener(() {
-      setState(() => _emailFocused = _emailFocus.hasFocus);
+    _phoneFocus.addListener(() {
+      setState(() => _phoneFocused = _phoneFocus.hasFocus);
     });
   }
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _animationController.dispose();
-    _emailFocus.dispose();
+    _phoneFocus.dispose();
     super.dispose();
   }
 
@@ -63,17 +67,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     setState(() => _isLoading = true);
     try {
       final authRepository = ref.read(authRepositoryProvider);
-      final email = _emailController.text.trim();
-      await authRepository.sendOtp(email);
-      widget.onOtpPhoneChange(email);
+      final phone = '+91${_phoneController.text.trim()}';
+      final result = await authRepository.sendOtp(phone);
+      if (!mounted) return;
+      if (result is AuthError) {
+        showAppToast(context, result.message, type: ToastType.error);
+        return;
+      }
+      widget.onOtpPhoneChange(phone);
+      if (result is AuthRequiresMpin) {
+        widget.onNeedsMpin(phone);
+        return;
+      }
       widget.onOtpSent();
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  bool _isValidEmail(String email) {
-    return email.contains('@') && email.contains('.') && email.length > 5;
+  bool _isValidPhone(String phone) {
+    return phone.length == 10 && int.tryParse(phone) != null;
   }
 
   @override
@@ -193,7 +206,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             text: TextSpan(
                               children: [
                                 TextSpan(
-                                  text: 'Channel\n',
+                                  text: 'Maha Maintain Pro\n',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: isSmall ? 26 : 32,
@@ -203,7 +216,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   ),
                                 ),
                                 TextSpan(
-                                  text: 'Partners',
+                                  text: 'Partner',
                                   style: TextStyle(
                                     color: const Color(0xFFFFD700),
                                     fontSize: isSmall ? 26 : 32,
@@ -301,7 +314,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ),
                           SizedBox(height: isSmall ? 8 : 12),
                           Text(
-                            "We'll send a secure OTP to your email",
+                            "We'll send a 4-digit OTP to verify your mobile number",
                             style: TextStyle(
                               fontSize: isSmall ? 13 : 14,
                               color: Colors.grey.shade600,
@@ -310,12 +323,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           ),
                           SizedBox(height: isSmall ? 24 : 32),
 
-                          // Email Input Field - Modern Glassmorphic
+                          // Phone Number Input Field - Modern Glassmorphic
                           AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: _emailFocused
+                                colors: _phoneFocused
                                     ? [
                                         AppTheme.saffron.withOpacity(0.08),
                                         AppTheme.saffron.withOpacity(0.04),
@@ -326,13 +339,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                       ],
                               ),
                               border: Border.all(
-                                color: _emailFocused
+                                color: _phoneFocused
                                     ? AppTheme.saffron.withOpacity(0.5)
                                     : Colors.grey.shade300,
-                                width: _emailFocused ? 2 : 1.5,
+                                width: _phoneFocused ? 2 : 1.5,
                               ),
                               borderRadius: BorderRadius.circular(16),
-                              boxShadow: _emailFocused
+                              boxShadow: _phoneFocused
                                   ? [
                                       BoxShadow(
                                         color: AppTheme.saffron.withOpacity(0.2),
@@ -348,27 +361,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                 vertical: 4,
                               ),
                               child: TextField(
-                                controller: _emailController,
-                                focusNode: _emailFocus,
-                                keyboardType: TextInputType.emailAddress,
+                                controller: _phoneController,
+                                focusNode: _phoneFocus,
+                                keyboardType: TextInputType.phone,
+                                maxLength: 10,
                                 decoration: InputDecoration(
                                   border: InputBorder.none,
-                                  hintText: 'your.email@example.com',
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  disabledBorder: InputBorder.none,
+                                  hintText: 'Enter 10-digit mobile number',
                                   hintStyle: TextStyle(
                                     color: Colors.grey.shade500,
                                     fontWeight: FontWeight.w400,
                                   ),
                                   contentPadding:
                                       const EdgeInsets.symmetric(vertical: 16),
+                                  counterText: '',
                                   prefixIcon: Padding(
                                     padding: const EdgeInsets.only(right: 12),
                                     child: Icon(
-                                      Icons.email_outlined,
+                                      Icons.phone_android_outlined,
                                   color: Colors.grey.shade600,
                                   size: 20,
                                 ),
                               ),
                               prefixIconConstraints: const BoxConstraints(),
+                              prefixText: '+91  ',
+                              prefixStyle: TextStyle(
+                                color: Colors.grey.shade800,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                             style: const TextStyle(
                               fontSize: 16,
@@ -389,7 +412,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       ),
                       SizedBox(height: isSmall ? 20 : 24),
                       AnimatedScale(
-                        scale: _isValidEmail(_emailController.text) ? 1.02 : 1.0,
+                        scale: _isValidPhone(_phoneController.text) ? 1.02 : 1.0,
                         duration: const Duration(milliseconds: 200),
                         child: SizedBox(
                           width: double.infinity,
@@ -398,7 +421,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             color: Colors.transparent,
                             child: InkWell(
                               onTap:
-                                  _isValidEmail(_emailController.text) && !_isLoading
+                                  _isValidPhone(_phoneController.text) && !_isLoading
                                       ? _sendOtp
                                       : null,
                               borderRadius: BorderRadius.circular(14),

@@ -282,7 +282,10 @@ class NearbyJobRow extends StatelessWidget {
   final Job job;
   final VoidCallback onTap;
   final VoidCallback onAccept;
-  const NearbyJobRow({required this.job, required this.onTap, required this.onAccept, Key? key}) : super(key: key);
+  final String? distanceOverride;
+  const NearbyJobRow(
+      {required this.job, required this.onTap, required this.onAccept, this.distanceOverride, Key? key})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -314,8 +317,10 @@ class NearbyJobRow extends StatelessWidget {
                         child: Text('₹${job.amount}',
                             style: const TextStyle(color: kEmerald, fontSize: 11, fontWeight: FontWeight.bold)),
                       ),
-                      const SizedBox(width: 8),
-                      Text(job.distance, style: TextStyle(color: AppTheme.saffronDark, fontSize: 11)),
+                      if ((distanceOverride ?? job.distance).isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        Text(distanceOverride ?? job.distance, style: TextStyle(color: AppTheme.saffronDark, fontSize: 11)),
+                      ],
                     ],
                   ),
                 ],

@@ -2,6 +2,15 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services") apply false
+}
+
+// The google-services plugin requires android/app/google-services.json to
+// exist or the build fails outright - only apply it once that file has been
+// placed here (see server/README.md for how to get it from Firebase). Until
+// then the app builds normally, just without push notifications working.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 android {

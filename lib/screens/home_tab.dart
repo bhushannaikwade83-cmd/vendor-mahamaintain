@@ -1,41 +1,38 @@
 import 'package:flutter/material.dart';
+import '../utils/error_messages.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_theme.dart';
+import '../main.dart' show authRepositoryProvider;
 import '../models/job_models.dart';
 import '../state/partner_app_state.dart';
 import '../widgets/job_card.dart';
 
-class HomeTab extends StatelessWidget {
+class HomeTab extends ConsumerWidget {
   final Function(int) onJobTap;
   const HomeTab({required this.onJobTap, Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vendorName = ref.watch(authRepositoryProvider).getCurrentVendorName() ?? 'Partner';
+    final claimedJobs = partnerAppState.jobs;
+    final completedCount = claimedJobs.where((j) => j.status == JobStatus.completed).length;
+
+    return RefreshIndicator(
+      onRefresh: () => partnerAppState.refreshJobs(),
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text('Good afternoon,', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                  SizedBox(height: 2),
-                  Text('Suresh Patil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text('Top Rated Partner • 4.92', style: TextStyle(fontSize: 11, color: Color(0xFF059669))),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: const [
-                  Text("Today's Target", style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                  SizedBox(height: 2),
-                  Text('₹4,500', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
-                ],
-              ),
+              const Text('Good afternoon,', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              const SizedBox(height: 2),
+              Text(vendorName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('Partner', style: TextStyle(fontSize: 11, color: Color(0xFF059669))),
             ],
           ),
           const SizedBox(height: 16),
@@ -56,8 +53,6 @@ class HomeTab extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text('₹${partnerAppState.todayEarnings}',
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
-                      const SizedBox(height: 4),
-                      const Text('+32% from yesterday', style: TextStyle(fontSize: 10, color: Color(0xFF059669))),
                     ],
                   ),
                 ),
@@ -74,9 +69,10 @@ class HomeTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Jobs Today', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      const Text('My Jobs', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                       const SizedBox(height: 2),
-                      const Text('5 / 8', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('$completedCount / ${claimedJobs.length}',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -84,7 +80,7 @@ class HomeTab extends StatelessWidget {
                           color: const Color(0xFFD1FAE5),
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text('4 Completed', style: TextStyle(fontSize: 10, color: Color(0xFF059669))),
+                        child: Text('$completedCount Completed', style: const TextStyle(fontSize: 10, color: Color(0xFF059669))),
                       ),
                     ],
                   ),
@@ -115,11 +111,17 @@ class HomeTab extends StatelessWidget {
               child: NewJobCard(
                 job: job,
                 onTap: () => onJobTap(job.id),
-                onAccept: () {
-                  partnerAppState.acceptJob(job.id);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Job accepted! ${job.customer}')),
-                  );
+                onAccept: () async {
+                  try {
+                    await partnerAppState.acceptJob(job.id);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Job accepted! ${job.customer}')),
+                    );
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
+                  }
                 },
               ),
             );
@@ -134,6 +136,7 @@ class HomeTab extends StatelessWidget {
             );
           }),
         ],
+      ),
       ),
     );
   }

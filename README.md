@@ -1,4 +1,4 @@
-# maha_vendor
+# vendor-mahamaintain
 
 A new Flutter project.
 

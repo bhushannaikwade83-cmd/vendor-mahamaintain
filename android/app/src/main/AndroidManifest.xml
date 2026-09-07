@@ -1,8 +1,29 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- For the full-screen "incoming job" alert (flutter_callkit_incoming),
+         so a new job request can wake the screen and show Accept/Decline
+         even with the app fully closed - see lib/services/fcm_service.dart. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application
-        android:label="Channel Partners"
+        android:label="Maha Maintain Pro Partner"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Google Maps API Key - same key/project as the consumer app
+             (MAHAMAINTAINPRO). If the map renders blank, this key's Android
+             restrictions in Google Cloud Console need this app's package
+             name (com.example.maha_vendor) + debug/release SHA-1 added
+             alongside the consumer app's. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyD9MUDoEMKnUWRSPEOMvmNkNzsFNI3NvnU" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,6 +44,15 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Lets DigiLocker's callback page redirect straight back into
+                 this app once the vendor authorizes - see
+                 server/digilocker_callback.php and DeepLinkService. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="mahavendor" android:host="digilocker-callback"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

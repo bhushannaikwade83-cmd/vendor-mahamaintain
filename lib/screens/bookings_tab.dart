@@ -16,9 +16,13 @@ class _BookingsTabState extends State<BookingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filter == null ? partnerAppState.jobs : partnerAppState.jobs.where((j) => j.status == _filter).toList();
+    final allJobs = [...partnerAppState.newJobs, ...partnerAppState.jobs];
+    final filtered = _filter == null ? allJobs : allJobs.where((j) => j.status == _filter).toList();
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () => partnerAppState.refreshJobs(),
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,6 +53,7 @@ class _BookingsTabState extends State<BookingsTab> {
             );
           }),
         ],
+      ),
       ),
     );
   }

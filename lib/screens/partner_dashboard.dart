@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../utils/error_messages.dart';
 import '../config/app_theme.dart';
 import '../state/partner_app_state.dart';
 import '../widgets/app_toast.dart';
@@ -20,51 +21,24 @@ class PartnerDashboard extends StatefulWidget {
 
 class _PartnerDashboardState extends State<PartnerDashboard> {
   int _selectedTab = 0;
-  int _notificationCount = 4;
-  Timer? _pushNotifTimer;
+  Timer? _jobPollTimer;
 
   @override
   void initState() {
     super.initState();
-    _startPushNotifications();
-  }
-
-  void _startPushNotifications() {
-    _pushNotifTimer = Timer.periodic(const Duration(seconds: 14), (_) {
-      if (!mounted || _selectedTab == 0) return;
-      final titles = [
-        '🚨 New Job Alert!',
-        '💰 Earnings Credit',
-        '📍 GPS Warning',
-        '💬 Customer Update',
-        '🏆 Leaderboard',
-      ];
-      final bodies = [
-        'Water Purifier job nearby - ₹1,850 • High priority',
-        '₹650 added for Electrician job completion',
-        'Weak signal in high-rise area. Tap to retry tracking.',
-        'Please bring extra UV filters for installation.',
-        'You moved up to #2 in Mira Road West Zone!',
-      ];
-      final idx = DateTime.now().second % titles.length;
-      showPushNotificationToast(
-        context,
-        title: titles[idx],
-        body: bodies[idx],
-        onTakeAction: () {
-          final newJobs = partnerAppState.newJobs;
-          if (newJobs.isNotEmpty) {
-            openJobDetailsSheet(context, newJobs.first.id);
-          }
-        },
-      );
-      setState(() => _notificationCount++);
+    // Real "new job" alerts need Firebase Cloud Messaging (not wired to the
+    // backend yet - see server/README.md design notes). Until then, poll
+    // for new jobs periodically so the badge/list reflect real data instead
+    // of showing fabricated notifications.
+    _jobPollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!mounted) return;
+      partnerAppState.refreshJobs();
     });
   }
 
   @override
   void dispose() {
-    _pushNotifTimer?.cancel();
+    _jobPollTimer?.cancel();
     super.dispose();
   }
 
@@ -138,7 +112,7 @@ class _PartnerDashboardState extends State<PartnerDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Channel Partners',
+                      const Text('Maha Maintain Pro',
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16)),
                       const SizedBox(height: 2),
                       const Text('Partner App', style: TextStyle(color: Colors.white70, fontSize: 11)),
@@ -150,8 +124,15 @@ class _PartnerDashboardState extends State<PartnerDashboard> {
           ),
           const SizedBox(width: 12),
           GestureDetector(
-            onTap: () {
-              partnerAppState.toggleOnline();
+            onTap: () async {
+              try {
+                await partnerAppState.toggleOnline();
+              } catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(friendlyErrorMessage(e))),
+                );
+              }
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -198,7 +179,7 @@ class _PartnerDashboardState extends State<PartnerDashboard> {
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Text('$_notificationCount',
+                    child: Text('${partnerAppState.newJobs.length}',
                         style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                   ),
                 ),
@@ -211,50 +192,50 @@ class _PartnerDashboardState extends State<PartnerDashboard> {
   }
 
   void _showNotifications() {
-    showNotificationsPanel(context, [
-      NotificationItem(
-        icon: Icons.notifications,
-        color: AppTheme.saffron,
-        content: const Text('New job request from Priya Sharma (Electrician)', style: TextStyle(fontSize: 12)),
-        onTap: () => setState(() => _selectedTab = 1),
-      ),
-      NotificationItem(
-        icon: Icons.wallet,
-        color: const Color(0xFF059669),
-        content: const Text('₹1,250 payment received for job #107', style: TextStyle(fontSize: 12)),
-        onTap: () => setState(() => _selectedTab = 2),
-      ),
-      NotificationItem(
-        icon: Icons.star,
-        color: const Color(0xFFF59E0B),
-        content: const Text('You received a 5-star rating from Kavita Nair', style: TextStyle(fontSize: 12)),
-        onTap: null,
-      ),
-      NotificationItem(
-        icon: Icons.trending_up,
-        color: AppTheme.saffron,
-        content: const Text('Weekly leaderboard: You are #3 in Mira Road zone', style: TextStyle(fontSize: 12)),
-        onTap: null,
-      ),
-    ]);
+    final newJobs = partnerAppState.newJobs;
+    if (newJobs.isEmpty) {
+      showNotificationsPanel(context, [
+        NotificationItem(
+          icon: Icons.notifications_none,
+          color: Colors.grey,
+          content: const Text('No new job requests right now', style: TextStyle(fontSize: 12)),
+          onTap: null,
+        ),
+      ]);
+      return;
+    }
+    showNotificationsPanel(
+      context,
+      newJobs
+          .map((job) => NotificationItem(
+                icon: Icons.notifications,
+                color: AppTheme.saffron,
+                content: Text('New job request: ${job.customer} (${job.service})', style: const TextStyle(fontSize: 12)),
+                onTap: () => openJobDetailsSheet(context, job.id),
+              ))
+          .toList(),
+    );
   }
 
   Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade100)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navTab('🏠', 'Home', 0),
-          _navTab('📋', 'Bookings', 1),
-          _navTab('💰', 'Earnings', 2),
-          _navTab('🗺️', 'Map', 3),
-          _navTab('🏢', 'Society', 4),
-          _navTab('👤', 'Profile', 5),
-        ],
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey.shade100)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _navTab('🏠', 'Home', 0),
+            _navTab('📋', 'Bookings', 1),
+            _navTab('💰', 'Earnings', 2),
+            _navTab('🗺️', 'Map', 3),
+            _navTab('🏢', 'Society', 4),
+            _navTab('👤', 'Profile', 5),
+          ],
+        ),
       ),
     );
   }

@@ -1,17 +1,54 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../main.dart' show authRepositoryProvider;
+import '../repositories/service_category_repository.dart';
 import '../state/partner_app_state.dart';
 
-class ProfileTab extends StatefulWidget {
+class ProfileTab extends ConsumerStatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
 
   @override
-  State<ProfileTab> createState() => _ProfileTabState();
+  ConsumerState<ProfileTab> createState() => _ProfileTabState();
 }
 
-class _ProfileTabState extends State<ProfileTab> {
+class _ProfileTabState extends ConsumerState<ProfileTab> {
+  final _categoryRepository = ServiceCategoryRepository();
+  bool _loadingCategories = true;
+  List<String> _myCategoryNames = [];
+
+  @override
+  void initState() {
+    super.initState();
+    partnerAppState.refreshEarnings();
+    _loadMyCategories();
+  }
+
+  Future<void> _loadMyCategories() async {
+    final vendorId = ref.read(authRepositoryProvider).getCurrentUserId();
+    if (vendorId == null) {
+      setState(() => _loadingCategories = false);
+      return;
+    }
+    try {
+      final all = await _categoryRepository.fetchCategories();
+      final mine = await _categoryRepository.fetchVendorCategoryIds(vendorId);
+      if (!mounted) return;
+      setState(() {
+        _myCategoryNames = all.where((c) => mine.contains(c.id)).map((c) => c.name).toList();
+        _loadingCategories = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingCategories = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final authRepository = ref.watch(authRepositoryProvider);
+    final vendorName = authRepository.getCurrentVendorName() ?? 'Partner';
+    final vendorPhone = authRepository.getCurrentVendorPhone();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -34,13 +71,11 @@ class _ProfileTabState extends State<ProfileTab> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('Suresh Patil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 2),
-                    Text('Top Rated Partner • 4.92', style: TextStyle(fontSize: 11, color: Color(0xFF059669))),
-                    SizedBox(height: 2),
-                    Text('Electrician • Plumber • Carpenter • Mira Road',
-                        style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                  children: [
+                    Text(vendorName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 2),
+                    if (vendorPhone != null)
+                      Text('+91 $vendorPhone', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
                   ],
                 ),
               ),
@@ -58,10 +93,11 @@ class _ProfileTabState extends State<ProfileTab> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                    children: const [
-                      Text('Jobs Done', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                      SizedBox(height: 4),
-                      Text('487', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    children: [
+                      const Text('Jobs Done', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Text('${partnerAppState.earnings?.jobsDone ?? 0}',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -76,28 +112,11 @@ class _ProfileTabState extends State<ProfileTab> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                    children: const [
-                      Text('Rating', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                      SizedBox(height: 4),
-                      Text('4.92', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B))),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Color(0xFFF1F5F9)),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: const [
-                      Text('Response', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                      SizedBox(height: 4),
-                      Text('98%', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                    children: [
+                      const Text('This Month', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Text('₹${(partnerAppState.earnings?.monthEarnings ?? 0).round()}',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
                     ],
                   ),
                 ),
@@ -107,20 +126,28 @@ class _ProfileTabState extends State<ProfileTab> {
           const SizedBox(height: 16),
           const Text('My Service Categories', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: ['Electrician', 'Plumber', 'AC Repair', 'Appliance Repair', 'Carpenter', 'Pest Control']
-                .map((tag) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(tag, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
-                    ))
-                .toList(),
-          ),
+          if (_loadingCategories)
+            const SizedBox(
+              height: 20,
+              child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+            )
+          else if (_myCategoryNames.isEmpty)
+            const Text('No categories selected yet', style: TextStyle(fontSize: 11, color: Color(0xFF64748B)))
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _myCategoryNames
+                  .map((tag) => Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(tag, style: const TextStyle(fontSize: 11, color: Color(0xFF475569))),
+                      ))
+                  .toList(),
+            ),
           const SizedBox(height: 16),
           Container(
             decoration: BoxDecoration(
@@ -131,47 +158,14 @@ class _ProfileTabState extends State<ProfileTab> {
             child: Column(
               children: [
                 _menuItem('🎓', 'Training Videos & Certifications', () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('12 training videos available')),
+                      const SnackBar(content: Text('Training content coming soon')),
                     )),
                 _divider(),
                 _menuItem('🆘', 'Help & Emergency Support', () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Creating support ticket...')),
+                      const SnackBar(content: Text('Support contact coming soon')),
                     )),
                 _divider(),
-                _menuItem('📄', 'Documents & Verification', () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('All documents verified ✓')),
-                    )),
-                _divider(),
-                _menuItem('📊', 'GPS Error Analytics (Admin)', () => _showGpsAnalytics()),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text('GPS Tracking Settings', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF))),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Color(0xFFF1F5F9)),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Error Simulation Frequency (Demo)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(child: _freqButton('Low', GpsErrorFrequency.low)),
-                    const SizedBox(width: 6),
-                    Expanded(child: _freqButton('Medium', GpsErrorFrequency.medium)),
-                    const SizedBox(width: 6),
-                    Expanded(child: _freqButton('High', GpsErrorFrequency.high)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                const Text('Affects Water Purifier & other jobs', style: TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                _menuItem('📄', 'Documents & Verification', () => context.push('/verification')),
               ],
             ),
           ),
@@ -188,9 +182,11 @@ class _ProfileTabState extends State<ProfileTab> {
                     actions: [
                       TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
                       TextButton(
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.pop(ctx);
-                          context.go('/login');
+                          await ref.read(authRepositoryProvider).logout();
+                          partnerAppState.resetSession();
+                          if (context.mounted) context.go('/login');
                         },
                         child: const Text('Logout', style: TextStyle(color: Colors.red)),
                       ),
@@ -231,112 +227,5 @@ class _ProfileTabState extends State<ProfileTab> {
 
   Widget _divider() {
     return Divider(height: 1, color: Color(0xFFF1F5F9));
-  }
-
-  Widget _freqButton(String label, GpsErrorFrequency freq) {
-    final active = partnerAppState.errorFrequency == freq;
-    return InkWell(
-      onTap: () => setState(() => partnerAppState.setErrorFrequency(freq)),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: active ? const Color(0xFFD1FAE5) : Color(0xFFF1F5F9),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        alignment: Alignment.center,
-        child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? const Color(0xFF059669) : Colors.black87)),
-      ),
-    );
-  }
-
-  void _showGpsAnalytics() {
-    showDialog(
-      context: context,
-      builder: (ctx) => Dialog(
-        insetPadding: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('GPS Error Analytics', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 4),
-              const Text('Admin Dashboard • Mira Road Zone', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          const Text('Total Errors', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                          const SizedBox(height: 4),
-                          Text('${partnerAppState.activeTrackingErrors.length}',
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFDC2626))),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          const Text('Water Purifier', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                          const SizedBox(height: 4),
-                          Text('${partnerAppState.activeTrackingErrors.where((e) => e.service == 'Water Purifier').length}',
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFFF97316))),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: const [
-                          Text('Error Rate', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                          SizedBox(height: 4),
-                          Text('0%', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1E40AF))),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text('Note: Errors tracked during job completion', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
-              const SizedBox(height: 12),
-              Center(
-                child: TextButton(
-                  onPressed: () {
-                    partnerAppState.clearTrackingErrors();
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Clear Analytics Data'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

@@ -1,89 +1,173 @@
-import 'dart:math';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/earnings_model.dart';
 import '../models/job_models.dart';
+import '../repositories/jobs_repository.dart';
 
-enum GpsErrorFrequency { low, medium, high }
-
-/// Shared in-memory app state for the Partner app demo — jobs, wallet,
-/// online status and GPS-error simulation config. Mirrors the single
-/// global JS state object from the reference HTML mockup.
+/// Shared app state for the Partner app — real jobs/earnings data fetched
+/// from the backend, plus online status.
 class PartnerAppState extends ChangeNotifier {
-  List<Job> jobs = sampleJobs();
+  static const _keyOnboardingCompleted = 'onboarding_completed';
+  static const _keyDigilockerStepDone = 'digilocker_step_done';
+  static const _keyCategoriesStepDone = 'categories_step_done';
+  static const _keySelfieStepDone = 'selfie_step_done';
+  static const _keyIsOnline = 'is_online';
+
+  final JobsRepository _jobsRepository = JobsRepository();
+
+  String? vendorId;
+
+  List<Job> newJobs = [];
+  List<Job> jobs = []; // "my jobs" - anything this vendor has claimed, any status
+  bool jobsLoading = false;
+  VendorEarnings? earnings;
+  bool earningsLoading = false;
+
+  int get walletBalance => (earnings?.walletBalance ?? 0).round();
+  int get todayEarnings => (earnings?.todayEarnings ?? 0).round();
+
   bool isOnline = true;
-  int walletBalance = 14280;
-  int todayEarnings = 2850;
-  GpsErrorFrequency errorFrequency = GpsErrorFrequency.low;
-  final List<TrackingError> activeTrackingErrors = [];
 
   bool onboardingCompleted = false;
-  int onboardingProgress = 65;
 
-  final Random _random = Random();
+  // Each step is tracked independently - completing one never implies the
+  // others are done. Onboarding progress is derived from how many of these
+  // are actually true, each only ever set after the backend confirms that
+  // specific step (DigiLocker connected, categories saved, selfie
+  // approved) - never optimistically.
+  bool digilockerStepDone = false;
+  bool categoriesStepDone = false;
+  bool selfieStepDone = false;
+
+  int get onboardingProgress {
+    final done = [digilockerStepDone, categoriesStepDone, selfieStepDone].where((d) => d).length;
+    return (done * 100 / 3).round();
+  }
 
   Job? jobById(int id) {
     try {
-      return jobs.firstWhere((j) => j.id == id);
+      return newJobs.firstWhere((j) => j.id == id);
     } catch (_) {
-      return null;
+      try {
+        return jobs.firstWhere((j) => j.id == id);
+      } catch (_) {
+        return null;
+      }
     }
   }
 
-  List<Job> get newJobs => jobs.where((j) => j.status == JobStatus.newJob).toList();
   List<Job> get upcomingJobs =>
       jobs.where((j) => j.status == JobStatus.accepted || j.status == JobStatus.inProgress).toList();
 
-  void toggleOnline() {
-    isOnline = !isOnline;
-    notifyListeners();
+  void setVendorId(String? id) {
+    vendorId = id;
+    if (id == null) {
+      newJobs = [];
+      jobs = [];
+      earnings = null;
+      notifyListeners();
+    } else {
+      refreshJobs();
+      refreshEarnings();
+      // Keep the backend's online flag in sync with what this device last
+      // showed - so a vendor who was offline when they closed the app
+      // doesn't silently start getting matched to jobs again.
+      _jobsRepository.setOnlineStatus(id, isOnline).catchError((_) {});
+    }
   }
 
-  bool acceptJob(int jobId) {
-    final job = jobById(jobId);
-    if (job == null || job.status != JobStatus.newJob) return false;
-    job.status = JobStatus.accepted;
+  /// Throws [JobActionException] if the backend update fails - the toggle
+  /// stays at its previous value so the UI doesn't claim "online" when the
+  /// backend never actually got the update (which would silently hide new
+  /// job requests from this vendor without them knowing why).
+  Future<void> toggleOnline() async {
+    final id = vendorId;
+    final next = !isOnline;
+    if (id == null) {
+      isOnline = next;
+      notifyListeners();
+      return;
+    }
+    await _jobsRepository.setOnlineStatus(id, next);
+    isOnline = next;
+    await _persistOnline();
     notifyListeners();
-    return true;
+    await refreshJobs();
   }
 
-  void rejectJob(int jobId) {
-    final job = jobById(jobId);
-    if (job == null) return;
-    job.status = JobStatus.cancelled;
-    notifyListeners();
+  Future<void> _persistOnline() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyIsOnline, isOnline);
   }
 
-  void startJob(int jobId) {
-    final job = jobById(jobId);
-    if (job == null) return;
-    job.status = JobStatus.inProgress;
+  Future<void> refreshJobs() async {
+    final id = vendorId;
+    if (id == null) return;
+    jobsLoading = true;
     notifyListeners();
+    try {
+      final snapshot = await _jobsRepository.fetchJobs(id);
+      newJobs = snapshot.newJobs;
+      jobs = snapshot.myJobs;
+    } finally {
+      jobsLoading = false;
+      notifyListeners();
+    }
   }
 
-  void setBeforePhoto(int jobId, String url) {
-    final job = jobById(jobId);
-    if (job == null) return;
-    job.beforePhoto = url;
+  Future<void> refreshEarnings() async {
+    final id = vendorId;
+    if (id == null) return;
+    earningsLoading = true;
     notifyListeners();
+    try {
+      earnings = await _jobsRepository.fetchEarnings(id);
+    } finally {
+      earningsLoading = false;
+      notifyListeners();
+    }
   }
 
-  void setAfterPhoto(int jobId, String url) {
-    final job = jobById(jobId);
-    if (job == null) return;
-    job.afterPhoto = url;
-    notifyListeners();
+  /// Throws [JobActionException] on failure (e.g. another vendor already
+  /// claimed it) - caller should catch and show the message.
+  Future<void> acceptJob(int jobId) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
+    await _jobsRepository.respondToJob(id, jobId, accept: true);
+    await refreshJobs();
   }
 
-  /// Returns true if OTP accepted and job completed.
-  bool completeJob(int jobId, String otp) {
+  Future<void> rejectJob(int jobId) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
+    await _jobsRepository.respondToJob(id, jobId, accept: false);
+    await refreshJobs();
+  }
+
+  Future<void> startJob(int jobId, {File? beforePhoto}) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
+    await _jobsRepository.startJob(id, jobId, beforePhoto: beforePhoto);
+    await refreshJobs();
+  }
+
+  /// Returns the completed job's amount (for the "₹X added" toast) on success.
+  Future<int> completeJob(int jobId, String otp, {File? afterPhoto}) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
     final job = jobById(jobId);
-    if (job == null) return false;
-    if (otp.trim().length != 6) return false;
-    job.status = JobStatus.completed;
-    job.otp = otp.trim();
-    todayEarnings += job.amount;
-    walletBalance += job.amount;
-    notifyListeners();
-    return true;
+    await _jobsRepository.completeJob(id, jobId, otp, afterPhoto: afterPhoto);
+    await refreshJobs();
+    await refreshEarnings();
+    return job?.amount ?? 0;
+  }
+
+  Future<void> cancelJob(int jobId) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
+    await _jobsRepository.cancelJob(id, jobId);
+    await refreshJobs();
   }
 
   void rateJob(int jobId, int rating) {
@@ -93,72 +177,74 @@ class PartnerAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool withdraw(int amount) {
-    if (amount < 100 || amount > walletBalance) return false;
-    walletBalance -= amount;
-    notifyListeners();
-    return true;
+  Future<void> withdraw(int amount) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
+    await _jobsRepository.withdraw(id, amount.toDouble());
+    await refreshEarnings();
   }
 
-  void setErrorFrequency(GpsErrorFrequency freq) {
-    errorFrequency = freq;
-    notifyListeners();
+  /// Loads persisted onboarding progress, if any. Call once at app startup
+  /// before the router is built, so a vendor who restarts the app mid- (or
+  /// post-) onboarding doesn't lose that progress.
+  Future<void> restore() async {
+    final prefs = await SharedPreferences.getInstance();
+    onboardingCompleted = prefs.getBool(_keyOnboardingCompleted) ?? false;
+    digilockerStepDone = prefs.getBool(_keyDigilockerStepDone) ?? false;
+    categoriesStepDone = prefs.getBool(_keyCategoriesStepDone) ?? false;
+    selfieStepDone = prefs.getBool(_keySelfieStepDone) ?? false;
+    isOnline = prefs.getBool(_keyIsOnline) ?? true;
   }
 
-  void recordTrackingError(int jobId, String service, String errorType) {
-    activeTrackingErrors.add(TrackingError(
-      jobId: jobId,
-      service: service,
-      errorType: errorType,
-      timestamp: DateTime.now().toIso8601String(),
-    ));
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyOnboardingCompleted, onboardingCompleted);
+    await prefs.setBool(_keyDigilockerStepDone, digilockerStepDone);
+    await prefs.setBool(_keyCategoriesStepDone, categoriesStepDone);
+    await prefs.setBool(_keySelfieStepDone, selfieStepDone);
   }
 
-  void clearTrackingErrors() {
-    activeTrackingErrors.clear();
-    notifyListeners();
-  }
-
-  /// Returns a random GPS error to surface, or null if none should fire this tick.
-  GpsErrorType? maybeSimulateGpsError(int jobId) {
-    final job = jobById(jobId);
-    if (job == null || job.status != JobStatus.inProgress) return null;
-
-    double chance = switch (errorFrequency) {
-      GpsErrorFrequency.low => 0.15,
-      GpsErrorFrequency.medium => 0.35,
-      GpsErrorFrequency.high => 0.65,
-    };
-    if (job.service == 'Water Purifier') chance += 0.25;
-
-    if (_random.nextDouble() > chance) return null;
-
-    final err = gpsErrorTypes[_random.nextInt(gpsErrorTypes.length)];
-    recordTrackingError(jobId, job.service, err.type);
-    return err;
-  }
-
+  // Bank account verification is not part of onboarding - it's gated behind
+  // the first withdrawal instead (see EarningsTab), so vendors can onboard
+  // and start getting matched to jobs immediately without waiting on
+  // RazorpayX approval.
   void completeOnboardingStep(int step) {
     switch (step) {
-      case 1:
-        onboardingProgress = max(onboardingProgress, 80);
+      case 1: // Identity & PAN (DigiLocker)
+        digilockerStepDone = true;
         break;
-      case 2:
-        onboardingProgress = max(onboardingProgress, 90);
+      case 2: // Service Categories
+        categoriesStepDone = true;
         break;
-      case 3:
-        onboardingProgress = max(onboardingProgress, 95);
-        break;
-      case 4:
-        onboardingProgress = 100;
+      case 3: // Live Selfie Verification
+        selfieStepDone = true;
         break;
     }
     notifyListeners();
+    _persist();
   }
 
   void finishOnboarding() {
     onboardingCompleted = true;
     notifyListeners();
+    _persist();
+  }
+
+  /// Called on logout so the next login starts from a clean slate instead
+  /// of remembering this session's onboarding progress.
+  void resetSession() {
+    onboardingCompleted = false;
+    digilockerStepDone = false;
+    categoriesStepDone = false;
+    selfieStepDone = false;
+    vendorId = null;
+    newJobs = [];
+    jobs = [];
+    earnings = null;
+    isOnline = true;
+    notifyListeners();
+    _persist();
+    _persistOnline();
   }
 }
 

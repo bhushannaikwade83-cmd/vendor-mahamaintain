@@ -123,85 +123,6 @@ void showAppToast(BuildContext context, String message, {ToastType type = ToastT
   AppToastHost.add(context, widget, duration: const Duration(milliseconds: 3200));
 }
 
-Widget _gpsToastButton(String label, VoidCallback onTap) {
-  return Expanded(
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-      ),
-    ),
-  );
-}
-
-void showGpsErrorToast(
-  BuildContext context, {
-  required String label,
-  required String desc,
-  required VoidCallback onRetry,
-  required VoidCallback onManual,
-  required VoidCallback onSupport,
-}) {
-  late String id;
-  final widget = _toastCard(
-    color: const Color(0xFFDC2626),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('GPS Tracking Error',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 2),
-                  Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                  const SizedBox(height: 2),
-                  Text(desc, style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 11)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            _gpsToastButton('Retry GPS', () {
-              AppToastHost.remove(id);
-              onRetry();
-            }),
-            const SizedBox(width: 6),
-            _gpsToastButton('Use Manual', () {
-              AppToastHost.remove(id);
-              onManual();
-            }),
-            const SizedBox(width: 6),
-            _gpsToastButton('Support', () {
-              AppToastHost.remove(id);
-              onSupport();
-            }),
-          ],
-        ),
-      ],
-    ),
-  );
-
-  id = AppToastHost.add(context, widget, duration: const Duration(seconds: 12));
-}
-
 void showRatingPromptToast(
   BuildContext context, {
   required String customerFirstName,
@@ -320,7 +241,7 @@ void showPushNotificationToast(
                     const SizedBox(height: 3),
                     Text(body, style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     const SizedBox(height: 6),
-                    const Text('Just now • Channel Partners', style: TextStyle(fontSize: 9, color: Colors.grey)),
+                    const Text('Just now • Maha Maintain Pro Partner', style: TextStyle(fontSize: 9, color: Colors.grey)),
                   ],
                 ),
               ),

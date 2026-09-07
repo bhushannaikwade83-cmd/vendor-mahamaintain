@@ -3,16 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_theme.dart';
 
 import '../main.dart' show authRepositoryProvider;
+import '../repositories/auth_repository.dart';
+import '../widgets/app_toast.dart';
 
 class OtpScreen extends ConsumerStatefulWidget {
   final String phoneNumber;
   final VoidCallback onVerificationSuccess;
   final VoidCallback onBackPress;
+  final void Function(String phoneNumber) onNeedsRegistration;
 
   const OtpScreen({
     required this.phoneNumber,
     required this.onVerificationSuccess,
     required this.onBackPress,
+    required this.onNeedsRegistration,
     Key? key,
   }) : super(key: key);
 
@@ -22,15 +26,18 @@ class OtpScreen extends ConsumerStatefulWidget {
 
 class _OtpScreenState extends ConsumerState<OtpScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _otpController = TextEditingController();
+  static const int _otpLength = 4;
+  final List<TextEditingController> _digitControllers =
+      List.generate(_otpLength, (_) => TextEditingController());
+  final List<FocusNode> _digitFocusNodes = List.generate(_otpLength, (_) => FocusNode());
   int _resendCountdown = 30;
   bool _canResend = false;
   bool _isVerifying = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
-  bool _otpFocused = false;
-  final FocusNode _otpFocus = FocusNode();
+
+  String get _otp => _digitControllers.map((c) => c.text).join();
 
   @override
   void initState() {
@@ -48,9 +55,25 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
         );
     _animationController.forward();
     _startResendCountdown();
-    _otpFocus.addListener(() {
-      setState(() => _otpFocused = _otpFocus.hasFocus);
-    });
+    for (final focusNode in _digitFocusNodes) {
+      focusNode.addListener(() => setState(() {}));
+    }
+  }
+
+  void _onDigitChanged(int index, String value) {
+    if (value.isNotEmpty && index < _otpLength - 1) {
+      _digitFocusNodes[index + 1].requestFocus();
+    }
+    if (value.isEmpty && index > 0) {
+      _digitFocusNodes[index - 1].requestFocus();
+    }
+    setState(() {});
+    if (_otp.length == _otpLength) {
+      FocusScope.of(context).unfocus();
+      if (!_isVerifying) {
+        _verifyOtp();
+      }
+    }
   }
 
   void _startResendCountdown() {
@@ -69,27 +92,50 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
 
   @override
   void dispose() {
-    _otpController.dispose();
+    for (final controller in _digitControllers) {
+      controller.dispose();
+    }
+    for (final focusNode in _digitFocusNodes) {
+      focusNode.dispose();
+    }
     _animationController.dispose();
-    _otpFocus.dispose();
     super.dispose();
   }
 
   void _verifyOtp() async {
+    if (_isVerifying) return;
     setState(() => _isVerifying = true);
     try {
       final authRepository = ref.read(authRepositoryProvider);
-      await authRepository.verifyOtp(phoneNumber, _otpController.text);
+      final result = await authRepository.verifyOtp(phoneNumber, _otp);
+      if (!mounted) return;
+      if (result is AuthError) {
+        showAppToast(context, result.message, type: ToastType.error);
+        return;
+      }
+      if (result is AuthNeedsRegistration) {
+        widget.onNeedsRegistration(phoneNumber);
+        return;
+      }
       onVerificationSuccess();
     } finally {
-      setState(() => _isVerifying = false);
+      if (mounted) setState(() => _isVerifying = false);
     }
   }
 
   void _resendOtp() async {
     final authRepository = ref.read(authRepositoryProvider);
-    await authRepository.resendOtp(phoneNumber);
-    _otpController.clear();
+    final result = await authRepository.resendOtp(phoneNumber);
+    if (!mounted) return;
+    if (result is AuthError) {
+      showAppToast(context, result.message, type: ToastType.error);
+      return;
+    }
+    for (final controller in _digitControllers) {
+      controller.clear();
+    }
+    setState(() {});
+    _digitFocusNodes.first.requestFocus();
     _startResendCountdown();
   }
 
@@ -169,16 +215,16 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                         ),
                         SizedBox(height: isSmall ? 16 : 20),
                         Text(
-                          'Channel',
+                          'Maha Maintain Pro',
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: isSmall ? 24 : 28,
+                            fontSize: isSmall ? 22 : 26,
                             fontWeight: FontWeight.bold,
                             letterSpacing: -0.5,
                           ),
                         ),
                         Text(
-                          'Partners',
+                          'Partner',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: isSmall ? 24 : 28,
@@ -202,13 +248,6 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          height: 3,
-                          width: _otpFocused ? 60 : 40,
-                          color: AppTheme.saffron,
-                          margin: const EdgeInsets.only(bottom: 20),
-                        ),
                         Text(
                           'Verify Phone Number',
                           style: TextStyle(
@@ -227,68 +266,62 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                           ),
                         ),
                         SizedBox(height: isSmall ? 24 : 32),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            border: Border.all(
-                              color: _otpFocused
-                                  ? AppTheme.saffron
-                                  : Colors.grey.shade200,
-                              width: _otpFocused ? 2 : 1,
-                            ),
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: _otpFocused
-                                ? [
-                                    BoxShadow(
-                                      color: AppTheme.saffron.withOpacity(0.15),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : [],
-                          ),
-                          child: TextField(
-                            controller: _otpController,
-                            focusNode: _otpFocus,
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: isSmall ? 20 : 24,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 6,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: '000000',
-                              hintStyle: TextStyle(
-                                color: Colors.grey.shade300,
-                                letterSpacing: 6,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: List.generate(_otpLength, (index) {
+                            final focused = _digitFocusNodes[index].hasFocus;
+                            return SizedBox(
+                              width: isSmall ? 60 : 70,
+                              height: isSmall ? 60 : 70,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  border: Border.all(
+                                    color: focused
+                                        ? AppTheme.saffron
+                                        : Colors.grey.shade200,
+                                    width: focused ? 2 : 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  boxShadow: focused
+                                      ? [
+                                          BoxShadow(
+                                            color: AppTheme.saffron.withOpacity(0.15),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ]
+                                      : [],
+                                ),
+                                child: TextField(
+                                  controller: _digitControllers[index],
+                                  focusNode: _digitFocusNodes[index],
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 1,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: isSmall ? 22 : 26,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    filled: false,
+                                    border: InputBorder.none,
+                                    enabledBorder: InputBorder.none,
+                                    focusedBorder: InputBorder.none,
+                                    disabledBorder: InputBorder.none,
+                                    counterText: '',
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (value) => _onDigitChanged(index, value),
+                                ),
                               ),
-                              filled: false,
-                              border: InputBorder.none,
-                              counterText: '',
-                              contentPadding:
-                                  const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            onChanged: (value) => setState(() {}),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(
-                            '${_otpController.text.length}/6',
-                            style: TextStyle(
-                              fontSize: isSmall ? 11 : 12,
-                              color: Colors.grey.shade500,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                            );
+                          }),
                         ),
                         SizedBox(height: isSmall ? 24 : 32),
                         AnimatedScale(
-                          scale: _otpController.text.length == 6 ? 1.02 : 1.0,
+                          scale: _otp.length == _otpLength ? 1.02 : 1.0,
                           duration: const Duration(milliseconds: 200),
                           child: SizedBox(
                             width: double.infinity,
@@ -296,7 +329,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen>
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: _otpController.text.length == 6 &&
+                                onTap: _otp.length == _otpLength &&
                                         !_isVerifying
                                     ? _verifyOtp
                                     : null,

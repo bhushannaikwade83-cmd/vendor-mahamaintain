@@ -1,0 +1,113 @@
+<?php
+declare(strict_types=1);
+
+// Copy this file to config.php and fill in your real values.
+// config.php is gitignored - it holds live secrets and must never be
+// committed.
+
+// ---------------------------------------------------------------------
+// Database (MariaDB)
+// ---------------------------------------------------------------------
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'your_database_name');
+define('DB_USER', 'your_database_user');
+define('DB_PASS', 'your_database_password');
+
+// Base URL the consumer app already serves category photos from
+// (service_categories.image_path is relative to this) - reused by
+// categories_list.php instead of the corrupted `emoji` column.
+define('SERVICE_CATEGORY_IMAGE_BASE_URL', 'https://yourdomain.com/mahamaintainpro/assets/services/');
+
+// Note: send-vendor-otp.php / verify-vendor-otp.php / register-vendor.php
+// hardcode DB credentials inline instead of reading them from here, to
+// match the consumer app's existing convention for these files. If you
+// rotate the DB password, update it in those three files too.
+
+// ---------------------------------------------------------------------
+// DigiLocker / API Setu OAuth
+//
+// Fill these in once your organization is registered and approved as a
+// DigiLocker Requester at https://partners.apisetu.gov.in. Until then,
+// digilocker_start.php / digilocker_callback.php will run but the calls to
+// DigiLocker will fail with an auth error, since these are placeholders.
+// ---------------------------------------------------------------------
+define('DIGILOCKER_CLIENT_ID', 'YOUR_CLIENT_ID');
+// The client secret must only ever live here, server-side. Never send it to
+// the Flutter app or put it in client-readable config.
+define('DIGILOCKER_CLIENT_SECRET', 'YOUR_CLIENT_SECRET');
+// Must exactly match the redirect URI registered in your API Setu Requester
+// configuration, and must point at digilocker_callback.php on this server.
+define('DIGILOCKER_REDIRECT_URI', 'https://yourdomain.com/server/digilocker_callback.php');
+
+// Documented DigiLocker OAuth 2.0 (Meri Pehchaan) endpoints. Confirm the
+// exact paths/version for your Requester in the API Setu partner dashboard
+// once approved - DigiLocker has revised these paths across API versions.
+define('DIGILOCKER_AUTHORIZE_URL', 'https://digilocker.meripehchaan.gov.in/public/oauth2/1/authorize');
+define('DIGILOCKER_TOKEN_URL', 'https://digilocker.meripehchaan.gov.in/public/oauth2/1/token');
+define('DIGILOCKER_ISSUED_DOCS_URL', 'https://digilocker.meripehchaan.gov.in/public/oauth2/2/files/issued');
+
+// Doctype codes that must be present in the vendor's issued documents list
+// for them to move to UNDER_REVIEW (pending your team's manual approval).
+// Confirm the exact codes issuers use for your required documents in the
+// API Setu dashboard - these are common examples, not guaranteed values.
+define('REQUIRED_DOC_TYPES', ['ADHAR', 'PANCR']);
+
+// ---------------------------------------------------------------------
+// Razorpay (bank account penny-drop verification)
+//
+// Fund Account Validation requires a RazorpayX account (not the standard
+// Payments account already wired for checkout in payment_repository.dart).
+// Get these from https://dashboard.razorpay.com -> Account & Settings ->
+// API Keys, once RazorpayX is enabled on your account. Until then,
+// bank_verify_start.php will run but the Razorpay calls will fail with an
+// auth error, since these are placeholders.
+// ---------------------------------------------------------------------
+define('RAZORPAY_KEY_ID', 'YOUR_RAZORPAYX_KEY_ID');
+// Never send this to the Flutter app - server-side only.
+define('RAZORPAY_KEY_SECRET', 'YOUR_RAZORPAYX_KEY_SECRET');
+// Set in Razorpay Dashboard -> Account & Settings -> Webhooks when you add
+// the bank_verify_webhook.php URL there. Used to verify webhook signatures.
+define('RAZORPAY_WEBHOOK_SECRET', 'YOUR_RAZORPAY_WEBHOOK_SECRET');
+
+define('RAZORPAY_API_BASE', 'https://api.razorpay.com/v1');
+
+// ---------------------------------------------------------------------
+// Selfie uploads
+// ---------------------------------------------------------------------
+// Absolute filesystem path this PHP process can write to - must NOT be
+// directly web-accessible (keep it outside your public web root, or protect
+// it with a .htaccess deny-all) since selfies are sensitive KYC documents.
+define('SELFIE_UPLOAD_DIR', __DIR__ . '/uploads/selfies');
+define('SELFIE_MAX_BYTES', 5 * 1024 * 1024); // 5 MB
+
+// ---------------------------------------------------------------------
+// Job before/after photos
+//
+// Unlike selfies these aren't sensitive KYC documents - the customer and
+// (eventually) admin need to view them - so this directory is public, with
+// no .htaccess deny-all.
+// ---------------------------------------------------------------------
+define('JOB_PHOTO_UPLOAD_DIR', __DIR__ . '/uploads/jobs');
+define('JOB_PHOTO_BASE_URL', 'https://yourdomain.com/mahamaintainpro/api/uploads/jobs/');
+define('JOB_PHOTO_MAX_BYTES', 5 * 1024 * 1024); // 5 MB
+
+function db(): PDO
+{
+    static $pdo = null;
+    if ($pdo === null) {
+        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=utf8mb4';
+        $pdo = new PDO($dsn, DB_USER, DB_PASS, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+    }
+    return $pdo;
+}
+
+function json_response(array $data, int $status = 200): void
+{
+    http_response_code($status);
+    header('Content-Type: application/json');
+    echo json_encode($data);
+    exit;
+}

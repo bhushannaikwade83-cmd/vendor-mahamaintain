@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
+import '../utils/error_messages.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../config/app_theme.dart';
+import '../main.dart' show authRepositoryProvider;
+import '../models/selfie_verification_model.dart';
+import '../repositories/digilocker_repository.dart';
+import '../repositories/selfie_repository.dart';
 import '../state/partner_app_state.dart';
 import '../widgets/app_toast.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   final VoidCallback onDone;
   const OnboardingScreen({required this.onDone, Key? key}) : super(key: key);
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
+  final _digiLockerRepository = DigiLockerRepository();
+  final _selfieRepository = SelfieRepository();
+  bool _checkingDigiLocker = false;
+  bool _checkingSelfie = false;
   @override
   void initState() {
     super.initState();
@@ -26,6 +37,71 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     partnerAppState.completeOnboardingStep(step);
     setState(() {});
     showAppToast(context, message, type: ToastType.success);
+  }
+
+  Future<void> _openDigiLockerVerification() async {
+    await context.push('/verification');
+    if (!mounted) return;
+
+    final vendorId = ref.read(authRepositoryProvider).getCurrentUserId();
+    if (vendorId == null) return;
+
+    setState(() => _checkingDigiLocker = true);
+    try {
+      final status = await _digiLockerRepository.fetchStatus(vendorId);
+      if (!mounted) return;
+      if (status.digilockerConnected) {
+        _step(1, 'DigiLocker verification submitted - identity & PAN are now under review.');
+      }
+    } catch (e) {
+      if (mounted) {
+        showAppToast(context, friendlyErrorMessage(e), type: ToastType.error);
+      }
+    } finally {
+      if (mounted) setState(() => _checkingDigiLocker = false);
+    }
+  }
+
+  Future<void> _openServiceCategories() async {
+    final saved = await context.push<bool>('/service-categories');
+    if (saved == true) {
+      _step(2, 'Service categories saved.');
+    }
+  }
+
+  Future<void> _openSelfieVerification() async {
+    await context.push('/selfie-verification');
+    if (!mounted) return;
+
+    final vendorId = ref.read(authRepositoryProvider).getCurrentUserId();
+    if (vendorId == null) return;
+
+    setState(() => _checkingSelfie = true);
+    try {
+      final status = await _selfieRepository.fetchStatus(vendorId);
+      if (!mounted) return;
+      if (status.status == SelfieVerificationStatus.approved) {
+        _step(3, 'Live selfie verified! Partner profile activated.');
+      } else if (status.status == SelfieVerificationStatus.pending) {
+        // Uploading the selfie is the vendor's part of this step - admin
+        // review happens afterward, but the checklist item is done once
+        // it's actually been submitted.
+        _step(3, 'Selfie submitted for review.');
+      }
+    } catch (e) {
+      if (mounted) showAppToast(context, friendlyErrorMessage(e), type: ToastType.error);
+    } finally {
+      if (mounted) setState(() => _checkingSelfie = false);
+    }
+  }
+
+  Future<void> _finishOnboarding() async {
+    // First time through onboarding, the vendor sets an M-PIN they'll use
+    // to log in from now on instead of an OTP.
+    await context.push('/mpin-setup');
+    if (!mounted) return;
+    partnerAppState.finishOnboarding();
+    widget.onDone();
   }
 
   @override
@@ -47,25 +123,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   colors: [AppTheme.saffron, AppTheme.saffronDark],
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text('Complete Your Profile',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16)),
-                        SizedBox(height: 2),
-                        Text('Step 1 of 5 • Takes 2 minutes',
-                            style: TextStyle(color: Colors.white70, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: widget.onDone,
-                    child: const Text('Skip for Demo',
-                        style: TextStyle(color: Colors.white70, fontSize: 12)),
-                  ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text('Complete Your Profile',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16)),
+                  SizedBox(height: 2),
+                  Text('3 quick steps • Takes 2 minutes',
+                      style: TextStyle(color: Colors.white70, fontSize: 11)),
                 ],
               ),
             ),
@@ -85,7 +150,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       child: const Text('👷', style: TextStyle(fontSize: 38)),
                     ),
                     const SizedBox(height: 16),
-                    const Text('Welcome to Channel Partners!',
+                    const Text('Welcome to Maha Maintain Pro Partner!',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
@@ -116,21 +181,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     const SizedBox(height: 24),
 
                     _stepCard(
-                      emoji: '📄',
+                      emoji: '🔒',
                       bg: const Color(0xFFDBEAFE),
-                      title: 'Aadhaar & PAN',
-                      subtitle: 'Upload documents for KYC',
-                      done: progress >= 80,
-                      onTap: () => _step(1, 'Aadhaar & PAN uploaded successfully (Demo). Documents verified!'),
-                    ),
-                    const SizedBox(height: 12),
-                    _stepCard(
-                      emoji: '🏦',
-                      bg: const Color(0xFFD1FAE5),
-                      title: 'Bank Account',
-                      subtitle: 'For instant payouts',
-                      done: progress >= 90,
-                      onTap: () => _step(2, 'Bank account linked with UPI (Demo). Ready for instant payouts.'),
+                      title: 'Identity & PAN (DigiLocker)',
+                      subtitle: _checkingDigiLocker
+                          ? 'Checking verification status...'
+                          : 'Verify Aadhaar & PAN via DigiLocker',
+                      done: partnerAppState.digilockerStepDone,
+                      onTap: _checkingDigiLocker ? null : _openDigiLockerVerification,
                     ),
                     const SizedBox(height: 12),
                     _stepCard(
@@ -138,17 +196,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       bg: const Color(0xFFFFE3D1),
                       title: 'Service Categories',
                       subtitle: 'Select what you can repair',
-                      done: progress >= 95,
-                      onTap: () => _step(3, 'Services updated: Electrician, Plumber, AC Repair, etc.'),
+                      done: partnerAppState.categoriesStepDone,
+                      onTap: _openServiceCategories,
                     ),
                     const SizedBox(height: 12),
                     _stepCard(
                       emoji: '📸',
                       bg: const Color(0xFFEDE9FE),
                       title: 'Live Selfie Verification',
-                      subtitle: 'Quick video KYC',
-                      done: progress >= 100,
-                      onTap: () => _step(4, 'Live selfie verified! Partner profile activated.'),
+                      subtitle: _checkingSelfie ? 'Checking verification status...' : 'Capture a live selfie for our team to verify',
+                      done: partnerAppState.selfieStepDone,
+                      onTap: _checkingSelfie ? null : _openSelfieVerification,
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgLight,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.account_balance_outlined, size: 18, color: AppTheme.textTertiary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "You'll add and verify your bank account later, from Earnings, right before your first withdrawal.",
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -165,10 +243,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        partnerAppState.finishOnboarding();
-                        widget.onDone();
-                      },
+                      onPressed: _finishOnboarding,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.saffron,
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -196,7 +271,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required String title,
     required String subtitle,
     required bool done,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     return InkWell(
       onTap: onTap,

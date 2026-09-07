@@ -1,19 +1,67 @@
 import 'package:flutter/material.dart';
+import '../utils/error_messages.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../config/app_theme.dart';
+import '../main.dart' show authRepositoryProvider;
+import '../models/bank_verification_model.dart';
+import '../models/earnings_model.dart';
+import '../repositories/bank_verification_repository.dart';
 import '../state/partner_app_state.dart';
 
-class EarningsTab extends StatefulWidget {
+class EarningsTab extends ConsumerStatefulWidget {
   const EarningsTab({Key? key}) : super(key: key);
 
   @override
-  State<EarningsTab> createState() => _EarningsTabState();
+  ConsumerState<EarningsTab> createState() => _EarningsTabState();
 }
 
-class _EarningsTabState extends State<EarningsTab> {
+class _EarningsTabState extends ConsumerState<EarningsTab> {
+  @override
+  void initState() {
+    super.initState();
+    partnerAppState.refreshEarnings();
+  }
+
+  /// Buckets the last 50 ledger transactions into the last 7 calendar days
+  /// (oldest first) and this week vs. the previous week, so the trend chart
+  /// reflects real earnings instead of scripted numbers.
+  ({List<double> days, List<String> labels, double thisWeek, double lastWeek}) _weeklyTrend() {
+    final transactions = partnerAppState.earnings?.transactions ?? [];
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final days = List<double>.filled(7, 0);
+    final labels = List<String>.filled(7, '');
+    const weekdayAbbrev = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    for (var i = 0; i < 7; i++) {
+      final date = todayDate.subtract(Duration(days: 6 - i));
+      labels[i] = weekdayAbbrev[date.weekday - 1];
+    }
+    double thisWeek = 0;
+    double lastWeek = 0;
+    for (final t in transactions) {
+      if (t.entryType != 'JOB_EARNING') continue;
+      final parsed = DateTime.tryParse(t.createdAt);
+      if (parsed == null) continue;
+      final date = DateTime(parsed.year, parsed.month, parsed.day);
+      final daysAgo = todayDate.difference(date).inDays;
+      if (daysAgo >= 0 && daysAgo < 7) {
+        days[6 - daysAgo] += t.amount;
+        thisWeek += t.amount;
+      } else if (daysAgo >= 7 && daysAgo < 14) {
+        lastWeek += t.amount;
+      }
+    }
+    return (days: days, labels: labels, thisWeek: thisWeek, lastWeek: lastWeek);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      onRefresh: () => partnerAppState.refreshEarnings(),
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,10 +89,11 @@ class _EarningsTabState extends State<EarningsTab> {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text('This Month', style: TextStyle(fontSize: 11, color: Colors.white70)),
-                          SizedBox(height: 2),
-                          Text('₹42,650', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+                        children: [
+                          const Text('This Month', style: TextStyle(fontSize: 11, color: Colors.white70)),
+                          const SizedBox(height: 2),
+                          Text('₹${(partnerAppState.earnings?.monthEarnings ?? 0).round()}',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
                         ],
                       ),
                     ),
@@ -95,10 +144,11 @@ class _EarningsTabState extends State<EarningsTab> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                    children: const [
-                      Text('This Week', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                      SizedBox(height: 4),
-                      Text('₹11,400', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    children: [
+                      const Text('This Week', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Text('₹${(partnerAppState.earnings?.weekEarnings ?? 0).round()}',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -113,10 +163,11 @@ class _EarningsTabState extends State<EarningsTab> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
-                    children: const [
-                      Text('This Month', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                      SizedBox(height: 4),
-                      Text('₹42,650', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    children: [
+                      const Text('This Month', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      Text('₹${(partnerAppState.earnings?.monthEarnings ?? 0).round()}',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -124,7 +175,12 @@ class _EarningsTabState extends State<EarningsTab> {
             ],
           ),
           const SizedBox(height: 16),
-          Container(
+          Builder(builder: (context) {
+            final trend = _weeklyTrend();
+            final maxVal = trend.days.fold<double>(0, (m, v) => v > m ? v : m);
+            final chartMax = maxVal <= 0 ? 100.0 : maxVal * 1.2;
+            final changePct = trend.lastWeek > 0 ? ((trend.thisWeek - trend.lastWeek) / trend.lastWeek * 100) : null;
+            return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -137,7 +193,12 @@ class _EarningsTabState extends State<EarningsTab> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('Weekly Trend', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                    const Text('↑ 18%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF059669))),
+                    if (changePct != null)
+                      Text('${changePct >= 0 ? '↑' : '↓'} ${changePct.abs().round()}%',
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: changePct >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626))),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -146,21 +207,15 @@ class _EarningsTabState extends State<EarningsTab> {
                   child: BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
-                      maxY: 7000,
+                      maxY: chartMax,
                       barGroups: [
-                        _barGroup(0, 3200),
-                        _barGroup(1, 4100),
-                        _barGroup(2, 2850),
-                        _barGroup(3, 5100),
-                        _barGroup(4, 3900),
-                        _barGroup(5, 6200),
-                        _barGroup(6, 2850),
+                        for (var i = 0; i < 7; i++) _barGroup(i, trend.days[i]),
                       ],
                       titlesData: FlTitlesData(
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            getTitlesWidget: (v, _) => Text(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][v.toInt()],
+                            getTitlesWidget: (v, _) => Text(trend.labels[v.toInt()],
                                 style: const TextStyle(fontSize: 10)),
                           ),
                         ),
@@ -173,7 +228,8 @@ class _EarningsTabState extends State<EarningsTab> {
                 ),
               ],
             ),
-          ),
+          );
+          }),
           const SizedBox(height: 12),
           Center(
             child: TextButton(
@@ -182,6 +238,7 @@ class _EarningsTabState extends State<EarningsTab> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -196,12 +253,13 @@ class _EarningsTabState extends State<EarningsTab> {
   }
 
   void _showWithdrawModal() {
+    final vendorId = ref.read(authRepositoryProvider).getCurrentUserId();
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         insetPadding: const EdgeInsets.all(20),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: _WithdrawModal(),
+        child: _WithdrawModal(vendorId: vendorId),
       ),
     );
   }
@@ -212,28 +270,67 @@ class _EarningsTabState extends State<EarningsTab> {
       builder: (ctx) => Dialog(
         insetPadding: const EdgeInsets.all(20),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: const _PaymentHistoryModal(),
+        child: _PaymentHistoryModal(transactions: partnerAppState.earnings?.transactions ?? []),
       ),
     );
   }
 }
 
 class _WithdrawModal extends StatefulWidget {
+  final String? vendorId;
+  const _WithdrawModal({required this.vendorId});
+
   @override
   State<_WithdrawModal> createState() => _WithdrawModalState();
 }
 
 class _WithdrawModalState extends State<_WithdrawModal> {
+  final _bankVerificationRepository = BankVerificationRepository();
   late TextEditingController _amountController;
+
+  bool _loadingStatus = true;
+  BankVerificationStatus _status = BankVerificationStatus.notSubmitted;
+  String? _accountLast4;
 
   @override
   void initState() {
     super.initState();
     _amountController = TextEditingController(text: '5000');
+    _loadBankStatus();
+  }
+
+  Future<void> _loadBankStatus() async {
+    final vendorId = widget.vendorId;
+    if (vendorId == null) {
+      setState(() => _loadingStatus = false);
+      return;
+    }
+    try {
+      final info = await _bankVerificationRepository.fetchStatus(vendorId);
+      if (!mounted) return;
+      setState(() {
+        _status = info.status;
+        _accountLast4 = info.accountNumberLast4;
+        _loadingStatus = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingStatus = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingStatus) {
+      return const Padding(
+        padding: EdgeInsets.all(40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_status != BankVerificationStatus.verified) {
+      return _unverifiedPrompt();
+    }
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -242,7 +339,8 @@ class _WithdrawModalState extends State<_WithdrawModal> {
         children: [
           const Text('Withdraw to Bank', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          const Text('Instant transfer to linked account (XXXX-4521)', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          Text('Instant transfer to verified account (XXXX-${_accountLast4 ?? "----"})',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
           const SizedBox(height: 16),
           const Text('Amount to Withdraw', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
           const SizedBox(height: 6),
@@ -275,13 +373,24 @@ class _WithdrawModalState extends State<_WithdrawModal> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     final amount = int.tryParse(_amountController.text);
-                    if (amount != null && partnerAppState.withdraw(amount)) {
+                    if (amount == null || amount < 100 || amount > partnerAppState.walletBalance) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Enter a valid amount within your available balance')),
+                      );
+                      return;
+                    }
+                    try {
+                      await partnerAppState.withdraw(amount);
+                      if (!context.mounted) return;
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('₹$amount withdrawn successfully!')),
                       );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -298,10 +407,78 @@ class _WithdrawModalState extends State<_WithdrawModal> {
       ),
     );
   }
+
+  Widget _unverifiedPrompt() {
+    final pending = _status == BankVerificationStatus.pending;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: pending ? const Color(0xFFFEF3C7) : const Color(0xFFFFE3D1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.center,
+            child: Text(pending ? '⏳' : '🏦', style: const TextStyle(fontSize: 26)),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            pending ? 'Bank Verification In Progress' : 'Add Your Bank Account',
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            pending
+                ? "We're confirming your bank account with a small verification credit. This usually takes a minute - try again shortly."
+                : 'To withdraw earnings, add and verify a bank account first. We confirm it with a small real bank credit before your first withdrawal.',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: const Text('Not Now'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: pending
+                      ? _loadBankStatus
+                      : () async {
+                          Navigator.pop(context);
+                          await context.push('/bank-verification');
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.saffron,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  child: Text(pending ? 'Refresh' : 'Add Bank Account', style: const TextStyle(color: Colors.white)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PaymentHistoryModal extends StatelessWidget {
-  const _PaymentHistoryModal();
+  final List<LedgerTransaction> transactions;
+  const _PaymentHistoryModal({required this.transactions});
 
   @override
   Widget build(BuildContext context) {
@@ -347,16 +524,24 @@ class _PaymentHistoryModal extends StatelessWidget {
           const SizedBox(height: 8),
           Container(
             constraints: const BoxConstraints(maxHeight: 200),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _transactionRow('Job #107 • Kavita Nair', 'UPI • Jan 16', '+ ₹720', Colors.green),
-                  _transactionRow('Job #108 • Ramesh Iyer', 'UPI • Jan 15', '+ ₹950', Colors.green),
-                  _transactionRow('Job #109 • Pooja Malhotra', 'UPI • Jan 14', '+ ₹2,400', Colors.green),
-                  _transactionRow('Weekly Incentive', 'Bonus • Jan 13', '+ ₹1,500', Colors.green),
-                ],
-              ),
-            ),
+            child: transactions.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No transactions yet', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      children: transactions.map((t) {
+                        final isCredit = t.amount >= 0;
+                        return _transactionRow(
+                          t.description ?? t.entryType,
+                          t.createdAt,
+                          '${isCredit ? '+' : '-'} ₹${t.amount.abs().round()}',
+                          isCredit ? Colors.green : Colors.red,
+                        );
+                      }).toList(),
+                    ),
+                  ),
           ),
           const SizedBox(height: 12),
           Center(

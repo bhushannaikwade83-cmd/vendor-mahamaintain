@@ -154,10 +154,10 @@ class _SplashScreenState extends State<SplashScreen>
 
                     // Title
                     const Text(
-                      'Channel',
+                      'Maha Maintain Pro',
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: 32,
+                        fontSize: 26,
                         fontWeight: FontWeight.bold,
                         letterSpacing: -0.5,
                       ),
@@ -166,7 +166,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const SizedBox(height: 4),
 
                     const Text(
-                      'Partners',
+                      'Partner',
                       style: TextStyle(
                         color: Color(0xFFFFD700),
                         fontSize: 32,
