@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/config.php';
+require __DIR__ . '/vendor_config.php';
 
 // Kicks off a Razorpay Fund Account Validation (penny-drop) for a vendor's
 // bank account. This only starts the check - the result arrives later via

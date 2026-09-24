@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/config.php';
+require __DIR__ . '/vendor_config.php';
 
 // Razorpay calls this URL when a fund_account.validation.* event happens.
 // Register it under Dashboard -> Account & Settings -> Webhooks, subscribed

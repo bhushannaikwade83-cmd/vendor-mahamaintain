@@ -1,74 +1,29 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.buildlog/
-.history
-.svn/
+# Configuration files with secrets
+server/vendor_config.php
+server/config.php
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be tracked by version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Flutter
+build/
 .dart_tool/
 .flutter-plugins
 .flutter-plugins-dependencies
-.packages
-.pub-cache/
-.pub/
-/build/
 
-# Web related
-lib/generated_plugin_registrant.dart
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
 
-# Symbolication related
-app.*.symbols
+# OS
+.DS_Store
+Thumbs.db
 
-# Obfuscation related
-app.*.map.json
+# Dependencies
+node_modules/
+pubspec.lock
 
-# iOS/macOS
-**/ios/**/*.mode1v3
-**/ios/**/*.mode2v3
-**/ios/**/*.moved-aside
-**/ios/**/*.pbxuser
-**/ios/**/*.perspectivev3
-**/ios/**/*.xcconfig
-**/ios/**/*.xcworkspace/xcuserdata/
-**/ios/**/.generated/
-**/ios/Flutter/Flutter.podspec
-**/ios/Flutter/Flutter.framework
-**/ios/Flutter/Flutter.modulemap
-**/ios/Flutter/GeneratedPluginRegistrant.*
-**/ios/Flutter/ephemeralmodules/
-**/ios/Flutter/bin/
-**/ios/Flutter/generated_plugins.cmake
-**/ios/Flutter/flutter_export_environment.sh
-**/ios/Flutter/.last_build_id
-**/ios/Flutter/app.flx
-**/ios/Flutter/app.zip
-**/ios/Flutter/flutter_assets/
-**/ios/Flutter/flutter_export_environment.sh
-**/ios/ServiceDefinitions.json
-**/ios/Runner/Flutter/Flutter.framework
-**/ios/Runner/Flutter/Flutter.modulemap
-**/ios/Runner/GeneratedPluginRegistrant.*
-
-# Coverage
-coverage/
-
-# Exceptions to above rules.
-!/packages/flutter_tools/test/flutter_release_bundle_data/linux/x64/libc.so.6
+# Misc
+*.log
+.env
+.env.local

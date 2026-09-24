@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/config.php';
+require __DIR__ . '/vendor_config.php';
 
 // Records a withdrawal against the vendor's ledger balance. This does NOT
 // yet execute a real bank transfer - that needs a Razorpay Payouts/Route

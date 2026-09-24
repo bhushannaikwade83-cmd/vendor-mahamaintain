@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require __DIR__ . '/config.php';
+require __DIR__ . '/vendor_config.php';
 
 // DigiLocker redirects the vendor's browser here after they sign in and
 // grant (or deny) consent. This runs on the server only - the Flutter app
