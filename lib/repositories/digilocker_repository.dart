@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/kyc_backend_config.dart';
 import '../models/vendor_verification_model.dart';
@@ -11,33 +12,50 @@ class DigiLockerRepository {
   // ===== OAUTH FLOW =====
 
   Future<String> startVerification(String vendorId) async {
+    final url = '${KycBackendConfig.backendBaseUrl}/digilocker_start.php';
+    debugPrint('🔵 [Repo] POST to: $url');
+    debugPrint('🔵 [Repo] Body: ${jsonEncode({'vendor_id': vendorId})}');
+
     final response = await http.post(
-      Uri.parse('${KycBackendConfig.backendBaseUrl}/digilocker_start.php'),
+      Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'vendor_id': vendorId}),
     );
 
+    debugPrint('🔵 [Repo] Response status: ${response.statusCode}');
+    debugPrint('🔵 [Repo] Response body: ${response.body}');
+
     final data = _decode(response.body);
 
     if (response.statusCode != 200 || data['authorization_url'] == null) {
+      debugPrint('❌ [Repo] Error: ${data['error']}');
       throw Exception(data['error']?.toString() ?? 'Could not start DigiLocker verification');
     }
 
+    debugPrint('🟢 [Repo] Got authorization URL');
     return data['authorization_url'] as String;
   }
 
   Future<VendorVerificationStatusInfo> fetchStatus(String vendorId) async {
+    final url = '${KycBackendConfig.backendBaseUrl}/verification_status.php?vendor_id=$vendorId';
+    debugPrint('🔵 [Repo] GET: $url');
+
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/verification_status.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
     );
 
+    debugPrint('🔵 [Repo] Response status: ${response.statusCode}');
+    debugPrint('🔵 [Repo] Response body: ${response.body}');
+
     final data = _decode(response.body);
 
     if (response.statusCode != 200) {
+      debugPrint('❌ [Repo] Error: ${data['error']}');
       throw Exception(data['error']?.toString() ?? 'Could not fetch verification status');
     }
 
+    debugPrint('🟢 [Repo] Got verification status');
     return VendorVerificationStatusInfo.fromJson(data);
   }
 

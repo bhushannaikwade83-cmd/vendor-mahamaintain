@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/vendor_config.php';
+set_cors_headers();
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');

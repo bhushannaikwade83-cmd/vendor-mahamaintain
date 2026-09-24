@@ -13,8 +13,11 @@ class DeepLinkService {
   static void init(GoRouter router) {
     _appLinks = AppLinks();
     _subscription = _appLinks!.uriLinkStream.listen((uri) {
-      if (uri.scheme == 'mahavendor' && uri.host == 'digilocker-callback') {
-        router.go('/verification');
+      // Handle deep link: mahavendor://digilocker-callback
+      if (uri.scheme == 'mahavendor') {
+        if (uri.host == 'digilocker-callback' || uri.path.contains('digilocker-callback')) {
+          Future.microtask(() => router.go('/digilocker-callback'));
+        }
       }
     });
   }

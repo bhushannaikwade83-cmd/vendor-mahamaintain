@@ -1,6 +1,22 @@
 -- DigiLocker integration schema additions
 -- Run this once to set up document storage and verification tables
 
+-- Tracks OAuth state tokens during DigiLocker authorization flow
+CREATE TABLE IF NOT EXISTS digilocker_oauth_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    vendor_id INT NOT NULL,
+    state_token VARCHAR(255) UNIQUE NOT NULL, -- CSRF token
+    code_verifier VARCHAR(255), -- PKCE: code verifier for token exchange
+    status VARCHAR(50) NOT NULL, -- INITIATED, COMPLETED, FAILED
+    expires_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
+    INDEX idx_state_token (state_token),
+    INDEX idx_vendor_id (vendor_id),
+    INDEX idx_expires_at (expires_at)
+);
+
 -- Stores Aadhaar/PAN/other document details extracted from DigiLocker
 CREATE TABLE IF NOT EXISTS vendor_digilocker_documents (
     id INT AUTO_INCREMENT PRIMARY KEY,

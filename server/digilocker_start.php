@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/vendor_config.php';
+set_cors_headers();
 
 header('Content-Type: application/json');
 
@@ -17,6 +18,8 @@ if ($vendorId === '') {
 }
 
 $state = bin2hex(random_bytes(24));
+$codeVerifier = bin2hex(random_bytes(32)); // PKCE: random code verifier
+$codeChallenge = rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '='); // PKCE: SHA256 hash
 $expiresAt = (new DateTime('+15 minutes'))->format('Y-m-d H:i:s');
 
 try {
@@ -27,6 +30,14 @@ try {
         'vendor_id' => $vendorId,
         'state' => $state,
         'expires_at' => $expiresAt,
+    ]);
+
+    // Store code_verifier for later token exchange (PKCE)
+    db()->prepare(
+        'UPDATE digilocker_oauth_sessions SET code_verifier = :code_verifier WHERE state_token = :state'
+    )->execute([
+        'code_verifier' => $codeVerifier,
+        'state' => $state,
     ]);
 
     db()->prepare(
@@ -43,7 +54,16 @@ $authorizationUrl = DIGILOCKER_AUTHORIZE_URL . '?' . http_build_query([
     'client_id' => DIGILOCKER_CLIENT_ID,
     'redirect_uri' => DIGILOCKER_REDIRECT_URI,
     'state' => $state,
+    'code_challenge' => $codeChallenge,  // PKCE
+    'code_challenge_method' => 'S256',   // PKCE: SHA256
 ]);
+
+// DEBUG: Log the exact URL being generated
+error_log('=== DIGILOCKER AUTH URL DEBUG ===');
+error_log('CLIENT_ID: ' . DIGILOCKER_CLIENT_ID);
+error_log('REDIRECT_URI: ' . DIGILOCKER_REDIRECT_URI);
+error_log('AUTH URL: ' . $authorizationUrl);
+error_log('=================================');
 
 json_response([
     'authorization_url' => $authorizationUrl,

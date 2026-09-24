@@ -74,8 +74,13 @@ class _VendorVerificationScreenState extends ConsumerState<VendorVerificationScr
   }
 
   Future<void> _startVerification() async {
+    debugPrint('🔵 [DigiLocker] _startVerification() called');
+
     final vendorId = _vendorId;
+    debugPrint('🔵 [DigiLocker] vendorId: $vendorId');
+
     if (vendorId == null) {
+      debugPrint('❌ [DigiLocker] vendorId is null');
       showAppToast(context, 'Please sign in again to continue', type: ToastType.error);
       return;
     }
@@ -83,14 +88,25 @@ class _VendorVerificationScreenState extends ConsumerState<VendorVerificationScr
     setState(() => _startingVerification = true);
 
     try {
+      debugPrint('🔵 [DigiLocker] Calling startVerification() API...');
       final authorizationUrl = await _digiLockerRepository.startVerification(vendorId);
-      final uri = Uri.parse(authorizationUrl);
+      debugPrint('🟢 [DigiLocker] Got authorization URL: $authorizationUrl');
 
+      final uri = Uri.parse(authorizationUrl);
+      debugPrint('🔵 [DigiLocker] Parsed URI: $uri');
+
+      debugPrint('🔵 [DigiLocker] Launching URL...');
       final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      debugPrint('🔵 [DigiLocker] launchUrl result: $launched');
+
       if (!launched && mounted) {
+        debugPrint('❌ [DigiLocker] Failed to launch URL');
         showAppToast(context, 'Could not open DigiLocker', type: ToastType.error);
+      } else if (launched && mounted) {
+        debugPrint('🟢 [DigiLocker] URL launched successfully, waiting for callback...');
       }
     } catch (e) {
+      debugPrint('❌ [DigiLocker] Error: $e');
       if (mounted) {
         showAppToast(context, friendlyErrorMessage(e), type: ToastType.error);
       }

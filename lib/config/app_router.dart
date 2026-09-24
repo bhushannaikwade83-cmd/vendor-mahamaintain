@@ -32,6 +32,12 @@ class AppRouter {
 
   static GoRouter createRouter(SupabaseAuthRepository authRepository) {
     return GoRouter(
+      errorBuilder: (context, state) => Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Text('Page not found: ${state.uri}'),
+        ),
+      ),
       redirect: (context, state) async {
         final isAuthenticated = authRepository.isAuthenticated();
         final isLoggingIn = state.matchedLocation == '/login' ||
@@ -187,6 +193,12 @@ class AppRouter {
           path: '/selfie-verification',
           name: 'selfie-verification',
           builder: (context, state) => const SelfieVerificationScreen(),
+        ),
+        // Deep link callback from DigiLocker OAuth - redirects to /verification
+        GoRoute(
+          path: '/digilocker-callback',
+          name: 'digilocker-callback',
+          builder: (context, state) => const VendorVerificationScreen(),
         ),
       ],
       initialLocation: '/login',

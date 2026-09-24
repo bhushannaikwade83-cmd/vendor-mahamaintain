@@ -57,12 +57,28 @@ HTML;
     exit;
 }
 
+// DEBUG: Log the exact callback request
+error_log('=== DIGILOCKER CALLBACK ===');
+error_log('REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? 'N/A'));
+error_log('QUERY_STRING: ' . ($_SERVER['QUERY_STRING'] ?? 'N/A'));
+error_log('GET Parameters: ' . print_r($_GET, true));
+error_log('==========================');
+
 $code = $_GET['code'] ?? null;
 $state = $_GET['state'] ?? null;
 $authError = $_GET['error'] ?? null;
+$errorDescription = $_GET['error_description'] ?? null;
 
 if ($authError) {
-    render_result_page('Verification Cancelled', 'You can close this window and return to the app.', false);
+    error_log('DigiLocker Error: ' . $authError);
+    if ($errorDescription) {
+        error_log('Error Description: ' . $errorDescription);
+    }
+    render_result_page(
+        'DigiLocker Error',
+        'Error: ' . $authError . ($errorDescription ? ' - ' . $errorDescription : ''),
+        false
+    );
 }
 
 if (!$code || !$state) {
@@ -82,21 +98,31 @@ $vendorId = $session['vendor_id'];
 // --- Exchange the authorization code for an access token -----------------
 // Server-to-server call; the client secret never leaves this backend.
 $ch = curl_init(DIGILOCKER_TOKEN_URL);
+
+$tokenPostFields = [
+    'grant_type' => 'authorization_code',
+    'code' => $code,
+    'client_id' => DIGILOCKER_CLIENT_ID,
+    'client_secret' => DIGILOCKER_CLIENT_SECRET,
+    'redirect_uri' => DIGILOCKER_REDIRECT_URI,
+    'code_verifier' => $session['code_verifier'],  // PKCE: Include code_verifier
+];
+
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_TIMEOUT => 20,
-    CURLOPT_POSTFIELDS => http_build_query([
-        'grant_type' => 'authorization_code',
-        'code' => $code,
-        'client_id' => DIGILOCKER_CLIENT_ID,
-        'client_secret' => DIGILOCKER_CLIENT_SECRET,
-        'redirect_uri' => DIGILOCKER_REDIRECT_URI,
-    ]),
+    CURLOPT_POSTFIELDS => http_build_query($tokenPostFields),
 ]);
 $tokenResponse = curl_exec($ch);
 $tokenHttpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlError = curl_error($ch);
 curl_close($ch);
+
+// Log for debugging
+error_log("DigiLocker Token Response: HTTP $tokenHttpCode");
+error_log("DigiLocker Token Body: $tokenResponse");
+if ($curlError) error_log("DigiLocker cURL Error: $curlError");
 
 $tokenData = json_decode((string)$tokenResponse, true) ?? [];
 $accessToken = $tokenData['access_token'] ?? null;
@@ -104,7 +130,11 @@ $accessToken = $tokenData['access_token'] ?? null;
 if ($tokenHttpCode !== 200 || !$accessToken) {
     db()->prepare('UPDATE digilocker_oauth_sessions SET status = "FAILED" WHERE id = :id')
         ->execute(['id' => $session['id']]);
-    render_result_page('Verification Failed', 'We could not complete DigiLocker verification. Please try again from the app.', false);
+
+    $errorMsg = $tokenData['error_description'] ?? ($tokenData['error'] ?? 'Unknown error');
+    error_log("DigiLocker Auth Failed: $errorMsg (HTTP $tokenHttpCode)");
+
+    render_result_page('Verification Failed', "DigiLocker error: $errorMsg. Please try again from the app.", false);
 }
 
 // --- Fetch the vendor's issued documents ----------------------------------
@@ -118,18 +148,22 @@ $docsResponse = curl_exec($ch);
 curl_close($ch);
 
 $docsData = json_decode((string)$docsResponse, true) ?? [];
+error_log('=== DIGILOCKER DOCUMENTS RESPONSE ===');
+error_log(print_r($docsData, true));
+error_log('=====================================');
+
 $issuedDocTypes = array_map(
     fn($doc) => (string)($doc['doctype'] ?? ''),
     $docsData['items'] ?? []
 );
+error_log('Extracted Document Types: ' . implode(', ', $issuedDocTypes));
 
 // access token is intentionally not persisted anywhere - we only use it to
 // pull the document list above, then discard it.
 
-// Only Aadhaar + PAN are asked for (REQUIRED_DOC_TYPES in config.php) - no
-// GST certificate.
-$identityVerified = in_array('ADHAR', $issuedDocTypes, true);
+// PAN + Driving License are checked (REQUIRED_DOC_TYPES in config.php)
 $panVerified = in_array('PANCR', $issuedDocTypes, true);
+$dlVerified = in_array('DRIVINGLICENSE', $issuedDocTypes, true);
 
 $requiredMet = true;
 foreach (REQUIRED_DOC_TYPES as $required) {
@@ -149,13 +183,11 @@ db()->prepare(
         verification_status = :status,
         digilocker_connected = 1,
         digilocker_verified_at = NOW(),
-        identity_verified = :identity,
         pan_verified = :pan,
         updated_at = NOW()
      WHERE vendor_id = :vendor_id'
 )->execute([
     'status' => $status,
-    'identity' => $identityVerified ? 1 : 0,
     'pan' => $panVerified ? 1 : 0,
     'vendor_id' => $vendorId,
 ]);
@@ -166,7 +198,7 @@ db()->prepare('UPDATE digilocker_oauth_sessions SET status = "COMPLETED" WHERE i
 render_result_page(
     $requiredMet ? 'DigiLocker Verified' : 'DigiLocker Connected',
     $requiredMet
-        ? 'Your documents have been received and are pending review. You can close this window and return to the app.'
-        : 'Some required documents were not found in your DigiLocker. You can close this window and return to the app.',
+        ? 'Your PAN and Driving License have been verified. You can close this window and return to the app.'
+        : 'PAN or Driving License not found in your DigiLocker. You can close this window and return to the app.',
     true
 );
