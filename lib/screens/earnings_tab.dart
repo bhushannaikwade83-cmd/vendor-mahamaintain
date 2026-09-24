@@ -21,7 +21,7 @@ class _EarningsTabState extends ConsumerState<EarningsTab> {
   @override
   void initState() {
     super.initState();
-    partnerAppState.refreshEarnings();
+    Future.microtask(() => partnerAppState.refreshEarnings());
   }
 
   /// Buckets the last 50 ledger transactions into the last 7 calendar days

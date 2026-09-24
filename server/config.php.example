@@ -31,13 +31,13 @@ define('SERVICE_CATEGORY_IMAGE_BASE_URL', 'https://yourdomain.com/mahamaintainpr
 // digilocker_start.php / digilocker_callback.php will run but the calls to
 // DigiLocker will fail with an auth error, since these are placeholders.
 // ---------------------------------------------------------------------
-define('DIGILOCKER_CLIENT_ID', 'YOUR_CLIENT_ID');
+define('DIGILOCKER_CLIENT_ID', 'PY80B2AE51');
 // The client secret must only ever live here, server-side. Never send it to
 // the Flutter app or put it in client-readable config.
-define('DIGILOCKER_CLIENT_SECRET', 'YOUR_CLIENT_SECRET');
+define('DIGILOCKER_CLIENT_SECRET', '18730dc619d2013839dd');
 // Must exactly match the redirect URI registered in your API Setu Requester
 // configuration, and must point at digilocker_callback.php on this server.
-define('DIGILOCKER_REDIRECT_URI', 'https://yourdomain.com/server/digilocker_callback.php');
+define('DIGILOCKER_REDIRECT_URI', 'https://digitrixmedia.com/mahamaintainpro/api/digilocker_callback.php');
 
 // Documented DigiLocker OAuth 2.0 (Meri Pehchaan) endpoints. Confirm the
 // exact paths/version for your Requester in the API Setu partner dashboard

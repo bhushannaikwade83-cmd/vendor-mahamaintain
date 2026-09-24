@@ -22,7 +22,7 @@ class _MapTabState extends State<MapTab> {
   @override
   void initState() {
     super.initState();
-    _loadLocation();
+    Future.microtask(() => _loadLocation());
   }
 
   Future<void> _loadLocation() async {

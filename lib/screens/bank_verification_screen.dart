@@ -33,7 +33,7 @@ class _BankVerificationScreenState extends ConsumerState<BankVerificationScreen>
   @override
   void initState() {
     super.initState();
-    _refreshStatus();
+    Future.microtask(() => _refreshStatus());
   }
 
   @override
