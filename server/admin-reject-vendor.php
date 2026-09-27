@@ -18,10 +18,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'POST required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$adminToken = requireAdminRole();
+
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
 $vendorId = (int)($input['vendor_id'] ?? 0);
-$adminId = (int)($input['admin_id'] ?? 0);
-$adminName = trim((string)($input['admin_name'] ?? 'System'));
+$adminId = (int)$adminToken['admin_id'];
+$adminName = (string)$adminToken['username'];
 $rejectionReason = trim((string)($input['rejection_reason'] ?? ''));
 $notes = trim((string)($input['notes'] ?? ''));
 

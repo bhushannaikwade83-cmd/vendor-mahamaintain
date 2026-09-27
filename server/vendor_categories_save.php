@@ -9,12 +9,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'POST required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
+
 $input = json_decode((string)file_get_contents('php://input'), true);
-$vendorId = trim((string)($input['vendor_id'] ?? ''));
 $categoryIds = $input['category_ids'] ?? null;
 
-if ($vendorId === '' || !is_array($categoryIds) || count($categoryIds) === 0) {
-    json_response(['error' => 'vendor_id and at least one category_id are required'], 400);
+if (!is_array($categoryIds) || count($categoryIds) === 0) {
+    json_response(['error' => 'at least one category_id is required'], 400);
 }
 
 $categoryIds = array_values(array_unique(array_map('intval', $categoryIds)));

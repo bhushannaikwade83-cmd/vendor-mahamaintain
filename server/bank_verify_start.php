@@ -13,14 +13,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'POST required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
+
 $input = json_decode((string)file_get_contents('php://input'), true);
-$vendorId = trim((string)($input['vendor_id'] ?? ''));
 $holderName = trim((string)($input['account_holder_name'] ?? ''));
 $accountNumber = trim((string)($input['account_number'] ?? ''));
 $ifsc = strtoupper(trim((string)($input['ifsc_code'] ?? '')));
 
-if ($vendorId === '' || $holderName === '' || $accountNumber === '' || $ifsc === '') {
-    json_response(['error' => 'vendor_id, account_holder_name, account_number and ifsc_code are required'], 400);
+if ($holderName === '' || $accountNumber === '' || $ifsc === '') {
+    json_response(['error' => 'account_holder_name, account_number and ifsc_code are required'], 400);
 }
 
 if (!preg_match('/^[A-Z]{4}0[A-Z0-9]{6}$/', $ifsc)) {

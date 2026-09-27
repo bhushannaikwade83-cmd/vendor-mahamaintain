@@ -138,10 +138,10 @@ class PartnerAppState extends ChangeNotifier {
     await refreshJobs();
   }
 
-  Future<void> rejectJob(int jobId) async {
+  Future<void> rejectJob(int jobId, {String? reason}) async {
     final id = vendorId;
     if (id == null) throw JobActionException('Not logged in');
-    await _jobsRepository.respondToJob(id, jobId, accept: false);
+    await _jobsRepository.respondToJob(id, jobId, accept: false, reason: reason);
     await refreshJobs();
   }
 
@@ -153,11 +153,30 @@ class PartnerAppState extends ChangeNotifier {
   }
 
   /// Returns the completed job's amount (for the "₹X added" toast) on success.
-  Future<int> completeJob(int jobId, String otp, {File? afterPhoto}) async {
+  Future<int> completeJob(
+    int jobId,
+    String otp, {
+    File? afterPhoto,
+    File? customerSignature,
+    String? workDescription,
+    String? partsUsed,
+    double? additionalCharges,
+    String? technicianRemarks,
+  }) async {
     final id = vendorId;
     if (id == null) throw JobActionException('Not logged in');
     final job = jobById(jobId);
-    await _jobsRepository.completeJob(id, jobId, otp, afterPhoto: afterPhoto);
+    await _jobsRepository.completeJob(
+      id,
+      jobId,
+      otp,
+      afterPhoto: afterPhoto,
+      customerSignature: customerSignature,
+      workDescription: workDescription,
+      partsUsed: partsUsed,
+      additionalCharges: additionalCharges,
+      technicianRemarks: technicianRemarks,
+    );
     await refreshJobs();
     await refreshEarnings();
     return job?.amount ?? 0;
@@ -170,11 +189,11 @@ class PartnerAppState extends ChangeNotifier {
     await refreshJobs();
   }
 
-  void rateJob(int jobId, int rating) {
-    final job = jobById(jobId);
-    if (job == null) return;
-    job.rating = rating;
-    notifyListeners();
+  Future<void> markOnTheWay(int jobId) async {
+    final id = vendorId;
+    if (id == null) throw JobActionException('Not logged in');
+    await _jobsRepository.markOnTheWay(id, jobId);
+    await refreshJobs();
   }
 
   Future<void> withdraw(int amount) async {

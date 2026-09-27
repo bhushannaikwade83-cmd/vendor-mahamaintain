@@ -3,18 +3,22 @@ declare(strict_types=1);
 
 require __DIR__ . '/vendor_config.php';
 
+set_cors_headers();
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['success' => false, 'message' => 'POST required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
+
 $input = json_decode((string)file_get_contents('php://input'), true);
-$vendorId = trim((string)($input['vendor_id'] ?? ''));
 $isOnline = filter_var($input['is_online'] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
 
-if ($vendorId === '' || $isOnline === null) {
-    json_response(['success' => false, 'message' => 'vendor_id and is_online are required'], 400);
+if ($isOnline === null) {
+    json_response(['success' => false, 'message' => 'is_online is required'], 400);
 }
 
 $stmt = db()->prepare('UPDATE vendors SET is_online = :is_online WHERE id = :vendor_id');

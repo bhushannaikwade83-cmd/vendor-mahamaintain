@@ -9,10 +9,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'POST required'], 405);
 }
 
-$vendorId = trim((string)($_POST['vendor_id'] ?? ''));
-if ($vendorId === '') {
-    json_response(['error' => 'vendor_id is required'], 400);
-}
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
 
 if (!isset($_FILES['selfie']) || $_FILES['selfie']['error'] !== UPLOAD_ERR_OK) {
     json_response(['error' => 'selfie file is required'], 400);

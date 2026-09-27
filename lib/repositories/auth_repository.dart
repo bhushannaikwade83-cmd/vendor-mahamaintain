@@ -55,11 +55,39 @@ class SupabaseAuthRepository {
   static const _keyVendorPhone = 'vendor_phone';
   static const _keyVendorEmail = 'vendor_email';
   static const _keyHasCompletedOnboardingBefore = 'has_completed_onboarding_before';
+  static const _keyJwtToken = 'vendor_jwt_token';
 
   String? _vendorId;
   String? _vendorName;
   String? _vendorPhone;
   String? _vendorEmail;
+
+  // Static so any screen/repository can attach the auth header without
+  // needing to thread this repository instance through everywhere.
+  static String? _authToken;
+
+  static String? get currentToken => _authToken;
+
+  static Future<void> setToken(String? token) async {
+    _authToken = token;
+    final prefs = await SharedPreferences.getInstance();
+    if (token != null) {
+      await prefs.setString(_keyJwtToken, token);
+    } else {
+      await prefs.remove(_keyJwtToken);
+    }
+  }
+
+  static Future<void> restoreToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    _authToken = prefs.getString(_keyJwtToken);
+  }
+
+  /// Standard headers for authenticated vendor API requests.
+  static Map<String, String> get staticAuthHeaders => {
+        'Content-Type': 'application/json',
+        if (_authToken != null) 'Authorization': 'Bearer $_authToken',
+      };
 
   /// True once this session's login (OTP or M-PIN) resolved to a vendor who
   /// already had an M-PIN set - meaning they finished onboarding on a
@@ -76,6 +104,7 @@ class SupabaseAuthRepository {
     _vendorPhone = prefs.getString(_keyVendorPhone);
     _vendorEmail = prefs.getString(_keyVendorEmail);
     hasCompletedOnboardingBefore = prefs.getBool(_keyHasCompletedOnboardingBefore) ?? false;
+    await SupabaseAuthRepository.restoreToken();
   }
 
   Future<void> _persistSession() async {
@@ -129,6 +158,8 @@ class SupabaseAuthRepository {
         return AuthError(data['message']?.toString() ?? 'Invalid OTP');
       }
 
+      await SupabaseAuthRepository.setToken(data['token'] as String?);
+
       if (data['exists'] == true) {
         _vendorId = data['vendor_id'].toString();
         _vendorName = data['name'] as String?;
@@ -157,6 +188,8 @@ class SupabaseAuthRepository {
         return AuthError(data['message']?.toString() ?? 'Incorrect M-PIN');
       }
 
+      await SupabaseAuthRepository.setToken(data['token'] as String?);
+
       _vendorId = data['vendor_id'].toString();
       _vendorName = data['name'] as String?;
       _vendorEmail = data['email'] as String?;
@@ -179,7 +212,7 @@ class SupabaseAuthRepository {
     try {
       final response = await http.post(
         Uri.parse('${KycBackendConfig.backendBaseUrl}/set-vendor-mpin.php'),
-        headers: {'Content-Type': 'application/json'},
+        headers: SupabaseAuthRepository.staticAuthHeaders,
         body: jsonEncode({'vendor_id': vendorId, 'mpin': mpin}),
       );
       final data = _decode(response.body);
@@ -204,9 +237,8 @@ class SupabaseAuthRepository {
     try {
       final response = await http.post(
         Uri.parse('${KycBackendConfig.backendBaseUrl}/register-vendor.php'),
-        headers: {'Content-Type': 'application/json'},
+        headers: SupabaseAuthRepository.staticAuthHeaders,
         body: jsonEncode({
-          'phone_number': _tenDigits(phoneNumber),
           'name': name,
           if (email != null && email.isNotEmpty) 'email': email,
         }),
@@ -214,6 +246,7 @@ class SupabaseAuthRepository {
       final data = _decode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
+        await SupabaseAuthRepository.setToken(data['token'] as String?);
         _vendorId = data['vendor_id'].toString();
         _vendorName = name;
         _vendorEmail = email;
@@ -242,6 +275,7 @@ class SupabaseAuthRepository {
     await prefs.remove(_keyVendorPhone);
     await prefs.remove(_keyVendorEmail);
     await prefs.remove(_keyHasCompletedOnboardingBefore);
+    await SupabaseAuthRepository.setToken(null);
   }
 
   String? getCurrentUserId() => _vendorId;

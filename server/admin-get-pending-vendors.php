@@ -18,6 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response(['error' => 'GET required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+requireAdminRole();
+
 $limit = (int)($_GET['limit'] ?? 50);
 $offset = (int)($_GET['offset'] ?? 0);
 $status = trim($_GET['status'] ?? 'UNDER_REVIEW'); // UNDER_REVIEW, DIGILOCKER_CONNECTED, UNVERIFIED, REJECTED

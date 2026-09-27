@@ -10,6 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+
 // Database credentials
 $servername = "localhost";
 $username = "digitrix_maha_user";
@@ -101,6 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $reset_stmt->execute();
     $reset_stmt->close();
 
+    $token = generateJWT([
+        'phone_number' => $phone_number,
+        'role' => 'vendor',
+        'vendor_id' => (int) $vendor['id'],
+    ]);
+
     http_response_code(200);
     echo json_encode([
         'success' => true,
@@ -109,6 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         'name' => $vendor['name'],
         'email' => $vendor['email'],
         'status' => $vendor['status'],
+        'token' => $token,
+        'token_type' => 'Bearer',
+        'expires_in' => 86400,
     ]);
 
 } else if ($_SERVER['REQUEST_METHOD'] == 'GET') {

@@ -6,10 +6,9 @@ set_cors_headers();
 
 header('Content-Type: application/json');
 
-$vendorId = trim((string)($_GET['vendor_id'] ?? ''));
-if ($vendorId === '') {
-    json_response(['error' => 'vendor_id is required'], 400);
-}
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
 
 $balanceStmt = db()->prepare('SELECT COALESCE(SUM(amount), 0) AS balance FROM vendor_ledger WHERE vendor_id = :vendor_id');
 $balanceStmt->execute(['vendor_id' => $vendorId]);

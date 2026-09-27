@@ -18,12 +18,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'POST required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (int) $vendorToken['vendor_id'];
+
 $input = json_decode(file_get_contents('php://input'), true) ?? [];
-$vendorId = (int)($input['vendor_id'] ?? 0);
 $documents = $input['documents'] ?? []; // Array of document objects from DigiLocker
 
-if ($vendorId <= 0 || empty($documents)) {
-    json_response(['error' => 'vendor_id and documents array required'], 400);
+if (empty($documents)) {
+    json_response(['error' => 'documents array required'], 400);
 }
 
 try {

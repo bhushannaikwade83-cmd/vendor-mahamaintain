@@ -10,6 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+
 // Database credentials
 $servername = "localhost";
 $username = "digitrix_maha_user";
@@ -24,14 +26,21 @@ if ($conn->connect_error) {
 $conn->set_charset("utf8");
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Vendor must be authenticated; vendor_id comes from the JWT
+    // (requireVendorRoleAllowUnregistered lets this run right after OTP
+    // verification too, before a vendors row necessarily exists yet - but
+    // set-vendor-mpin is only ever called after registration completes, so
+    // vendor_id will be present in practice).
+    $vendorToken = requireVendorRole();
+
     $data = json_decode(file_get_contents("php://input"), true);
 
-    if (!isset($data['vendor_id']) || !isset($data['mpin'])) {
+    if (!isset($data['mpin'])) {
         http_response_code(400);
-        die(json_encode(['success' => false, 'message' => 'vendor_id and mpin are required']));
+        die(json_encode(['success' => false, 'message' => 'mpin is required']));
     }
 
-    $vendor_id = (int) $data['vendor_id'];
+    $vendor_id = (int) $vendorToken['vendor_id'];
     $mpin = trim((string) $data['mpin']);
 
     if (!preg_match('/^[0-9]{4}$/', $mpin)) {

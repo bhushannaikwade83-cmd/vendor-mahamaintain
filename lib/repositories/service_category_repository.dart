@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/kyc_backend_config.dart';
 import '../models/service_category_model.dart';
+import 'auth_repository.dart';
 
 class ServiceCategoryRepository {
   Future<List<ServiceCategory>> fetchCategories() async {
@@ -22,6 +23,7 @@ class ServiceCategoryRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/vendor_categories_get.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
 
     final data = _decode(response.body);
@@ -36,7 +38,7 @@ class ServiceCategoryRepository {
   Future<void> saveVendorCategoryIds(String vendorId, List<int> categoryIds) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/vendor_categories_save.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({'vendor_id': vendorId, 'category_ids': categoryIds}),
     );
 

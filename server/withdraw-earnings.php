@@ -9,18 +9,22 @@ require __DIR__ . '/vendor_config.php';
 // this deducts the balance and creates an audit trail so the real payout
 // wiring can be dropped in later without changing this contract.
 
+set_cors_headers();
 header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['success' => false, 'message' => 'POST required'], 405);
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
+
 $input = json_decode((string)file_get_contents('php://input'), true);
-$vendorId = trim((string)($input['vendor_id'] ?? ''));
 $amount = isset($input['amount']) ? (float)$input['amount'] : 0;
 
-if ($vendorId === '' || $amount <= 0) {
-    json_response(['success' => false, 'message' => 'vendor_id and a positive amount are required'], 400);
+if ($amount <= 0) {
+    json_response(['success' => false, 'message' => 'a positive amount is required'], 400);
 }
 
 $bankStmt = db()->prepare('SELECT verification_status FROM vendor_bank_accounts WHERE vendor_id = :vendor_id');

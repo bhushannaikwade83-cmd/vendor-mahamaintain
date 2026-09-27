@@ -17,12 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     json_response(['error' => 'GET required'], 405);
 }
 
-$vendorId = (int)($_GET['vendor_id'] ?? 0);
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (int) $vendorToken['vendor_id'];
 $docType = trim($_GET['document_type'] ?? ''); // Optional filter by type
-
-if ($vendorId <= 0) {
-    json_response(['error' => 'vendor_id required'], 400);
-}
 
 try {
     $pdo = db();

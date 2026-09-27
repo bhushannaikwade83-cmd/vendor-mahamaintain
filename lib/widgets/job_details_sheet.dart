@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../config/app_theme.dart';
 import '../models/job_models.dart';
 import '../repositories/jobs_repository.dart';
 import '../state/partner_app_state.dart';
 import 'app_toast.dart';
 import 'job_card.dart';
+import 'signature_pad.dart';
 import '../utils/error_messages.dart';
 
 void openJobDetailsSheet(BuildContext hostContext, int jobId) {
@@ -29,13 +32,22 @@ class JobDetailsSheet extends StatefulWidget {
 
 class _JobDetailsSheetState extends State<JobDetailsSheet> {
   final _otpController = TextEditingController();
+  final _workDescriptionController = TextEditingController();
+  final _partsUsedController = TextEditingController();
+  final _additionalChargesController = TextEditingController();
+  final _technicianRemarksController = TextEditingController();
   final _picker = ImagePicker();
   File? _capturedAfterPhoto;
+  File? _capturedSignature;
   bool _busy = false;
 
   @override
   void dispose() {
     _otpController.dispose();
+    _workDescriptionController.dispose();
+    _partsUsedController.dispose();
+    _additionalChargesController.dispose();
+    _technicianRemarksController.dispose();
     super.dispose();
   }
 
@@ -56,9 +68,30 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
   }
 
   void _reject() async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reject Job'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(hintText: 'Reason (optional)'),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, reasonController.text.trim()),
+            child: const Text('Reject', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return; // dialog cancelled
+
     setState(() => _busy = true);
     try {
-      await partnerAppState.rejectJob(widget.jobId);
+      await partnerAppState.rejectJob(widget.jobId, reason: reason);
       if (!mounted) return;
       Navigator.pop(context);
       showAppToast(widget.hostContext, 'Job rejected', type: ToastType.info);
@@ -69,10 +102,45 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     }
   }
 
-  void _navigate() {
+  Future<void> _navigate() async {
     final job = partnerAppState.jobById(widget.jobId);
     if (job == null) return;
-    showAppToast(widget.hostContext, 'Opening Google Maps navigation to ${job.customer}...', type: ToastType.info);
+
+    final Uri mapsUri;
+    if (job.latitude != null && job.longitude != null) {
+      mapsUri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${job.latitude},${job.longitude}');
+    } else {
+      mapsUri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(job.address)}');
+    }
+
+    final launched = await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      showAppToast(widget.hostContext, 'Could not open maps', type: ToastType.error);
+    }
+  }
+
+  Future<void> _callCustomer() async {
+    final job = partnerAppState.jobById(widget.jobId);
+    if (job == null) return;
+    final telUri = Uri.parse('tel:${job.phone}');
+    final launched = await launchUrl(telUri);
+    if (!launched && mounted) {
+      showAppToast(widget.hostContext, 'Could not start call', type: ToastType.error);
+    }
+  }
+
+  void _markOnTheWay() async {
+    setState(() => _busy = true);
+    try {
+      await partnerAppState.markOnTheWay(widget.jobId);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showAppToast(widget.hostContext, 'Customer notified you are on the way', type: ToastType.success);
+    } on JobActionException catch (e) {
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showAppToast(widget.hostContext, friendlyErrorMessage(e), type: ToastType.error);
+    }
   }
 
   void _startJob() async {
@@ -96,6 +164,30 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     setState(() => _capturedAfterPhoto = File(photo.path));
   }
 
+  Future<void> _captureSignature() async {
+    final padKey = GlobalKey<SignaturePadState>();
+    final file = await showDialog<File>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Customer Signature'),
+        content: SignaturePad(key: padKey),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final exported = await padKey.currentState?.exportAsFile();
+              if (dialogContext.mounted) Navigator.pop(dialogContext, exported);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (file != null) {
+      setState(() => _capturedSignature = file);
+    }
+  }
+
   void _completeJob() async {
     final otp = _otpController.text.trim();
     if (otp.length != 6) {
@@ -106,17 +198,23 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     if (job == null) return;
     setState(() => _busy = true);
     try {
-      final amount = await partnerAppState.completeJob(widget.jobId, otp, afterPhoto: _capturedAfterPhoto);
+      final amount = await partnerAppState.completeJob(
+        widget.jobId,
+        otp,
+        afterPhoto: _capturedAfterPhoto,
+        customerSignature: _capturedSignature,
+        workDescription: _workDescriptionController.text.trim(),
+        partsUsed: _partsUsedController.text.trim(),
+        additionalCharges: double.tryParse(_additionalChargesController.text.trim()),
+        technicianRemarks: _technicianRemarksController.text.trim(),
+      );
       if (!mounted) return;
       Navigator.pop(context);
       showAppToast(widget.hostContext, 'Job completed! ₹$amount added to your wallet', type: ToastType.success);
-      Future.delayed(const Duration(milliseconds: 900), () {
-        showRatingPromptToast(
-          widget.hostContext,
-          customerFirstName: job.customer.split(' ').first,
-          onRate: (r) => partnerAppState.rateJob(widget.jobId, r),
-        );
-      });
+      // The customer's real rating (submitted from their own app once the
+      // order shows as completed) shows up here automatically on the next
+      // refreshJobs() - see the JobStatus.completed branch below, which
+      // reads job.rating straight from the server. No self-rating here.
     } on JobActionException catch (e) {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -194,25 +292,30 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
                           const SizedBox(height: 6),
                           Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: kEmeraldBg,
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.phone, size: 12, color: kEmerald),
-                                    const SizedBox(width: 6),
-                                    Text(job.phone,
-                                        style: const TextStyle(color: kEmerald, fontSize: 11, fontWeight: FontWeight.w600)),
-                                  ],
+                              InkWell(
+                                onTap: _callCustomer,
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: kEmeraldBg,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.phone, size: 12, color: kEmerald),
+                                      const SizedBox(width: 6),
+                                      Text(job.phone,
+                                          style: const TextStyle(color: kEmerald, fontSize: 11, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
                               InkWell(
                                 onTap: () {
+                                  Clipboard.setData(ClipboardData(text: job.address));
                                   showAppToast(widget.hostContext, 'Address copied to clipboard', type: ToastType.success);
                                 },
                                 borderRadius: BorderRadius.circular(20),
@@ -308,6 +411,33 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
                               ],
                             ),
                           ],
+                          if (job.status == JobStatus.inProgress) ...[
+                            const SizedBox(height: 16),
+                            const Text('COMPLETION REPORT',
+                                style: TextStyle(fontSize: 11, letterSpacing: 1, color: kSlateText)),
+                            const SizedBox(height: 8),
+                            _reportField(_workDescriptionController, 'Work description', maxLines: 2),
+                            const SizedBox(height: 8),
+                            _reportField(_partsUsedController, 'Parts / materials used', maxLines: 2),
+                            const SizedBox(height: 8),
+                            _reportField(_additionalChargesController, 'Additional charges (₹)',
+                                keyboardType: TextInputType.number),
+                            const SizedBox(height: 8),
+                            _reportField(_technicianRemarksController, 'Your remarks', maxLines: 2),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _captureSignature,
+                              icon: Icon(_capturedSignature != null ? Icons.check_circle : Icons.draw_outlined,
+                                  color: _capturedSignature != null ? kEmerald : AppTheme.saffron, size: 18),
+                              label: Text(
+                                _capturedSignature != null ? 'Signature captured' : 'Capture customer signature',
+                                style: TextStyle(color: _capturedSignature != null ? kEmerald : AppTheme.saffron),
+                              ),
+                              style: OutlinedButton.styleFrom(
+                                side: BorderSide(color: _capturedSignature != null ? kEmerald : AppTheme.saffron),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
                         ],
                       ),
@@ -340,7 +470,9 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     if (localFile != null) {
       content = ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.file(localFile, fit: BoxFit.cover));
     } else if (url != null) {
-      content = ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.network(url, fit: BoxFit.cover));
+      content = ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.network(url, fit: BoxFit.cover, cacheWidth: 400));
     } else {
       content = Container(
         decoration: BoxDecoration(
@@ -376,6 +508,25 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
     );
   }
 
+  Widget _reportField(TextEditingController controller, String hint, {int maxLines = 1, TextInputType? keyboardType}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      style: const TextStyle(fontSize: 13),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kEmerald)),
+      ),
+    );
+  }
+
   Widget _buildActions(Job job) {
     switch (job.status) {
       case JobStatus.newJob:
@@ -407,22 +558,41 @@ class _JobDetailsSheetState extends State<JobDetailsSheet> {
           ],
         );
       case JobStatus.accepted:
-        return Row(
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _navigate,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: BorderSide(color: AppTheme.saffron.withOpacity(0.4)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _navigate,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: AppTheme.saffron.withOpacity(0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    icon: Icon(Icons.directions, color: AppTheme.saffron, size: 18),
+                    label: Text('Navigate', style: TextStyle(color: AppTheme.saffron, fontWeight: FontWeight.w600)),
+                  ),
                 ),
-                icon: Icon(Icons.directions, color: AppTheme.saffron, size: 18),
-                label: Text('Navigate', style: TextStyle(color: AppTheme.saffron, fontWeight: FontWeight.w600)),
-              ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : _markOnTheWay,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: kEmerald.withOpacity(0.4)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    icon: Icon(Icons.two_wheeler, color: kEmerald, size: 18),
+                    label: Text('On My Way', style: TextStyle(color: kEmerald, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Expanded(
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
               child: ElevatedButton(
                 onPressed: _busy ? null : _startJob,
                 style: ElevatedButton.styleFrom(

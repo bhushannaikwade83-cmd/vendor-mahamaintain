@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../config/kyc_backend_config.dart';
 import '../models/earnings_model.dart';
 import '../models/job_models.dart';
+import 'auth_repository.dart';
 
 class VendorJobsSnapshot {
   final List<Job> newJobs;
@@ -23,6 +24,7 @@ class JobsRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/get-vendor-jobs.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
     final data = _decode(response.body);
     if (response.statusCode != 200) {
@@ -34,14 +36,15 @@ class JobsRepository {
     );
   }
 
-  Future<void> respondToJob(String vendorId, int bookingId, {required bool accept}) async {
+  Future<void> respondToJob(String vendorId, int bookingId, {required bool accept, String? reason}) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/respond-to-job.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'booking_id': bookingId,
         'action': accept ? 'accept' : 'reject',
+        if (!accept && reason != null && reason.isNotEmpty) 'reason': reason,
       }),
     );
     final data = _decode(response.body);
@@ -50,18 +53,40 @@ class JobsRepository {
     }
   }
 
+  Future<void> markOnTheWay(String vendorId, int bookingId) async {
+    await _updateStatus(vendorId, bookingId, 'on_the_way');
+  }
+
   Future<void> startJob(String vendorId, int bookingId, {File? beforePhoto}) async {
     await _updateStatus(vendorId, bookingId, 'start', photoField: 'before_photo', photo: beforePhoto);
   }
 
-  Future<void> completeJob(String vendorId, int bookingId, String completionOtp, {File? afterPhoto}) async {
+  Future<void> completeJob(
+    String vendorId,
+    int bookingId,
+    String completionOtp, {
+    File? afterPhoto,
+    File? customerSignature,
+    String? workDescription,
+    String? partsUsed,
+    double? additionalCharges,
+    String? technicianRemarks,
+  }) async {
     await _updateStatus(
       vendorId,
       bookingId,
       'complete',
       photoField: 'after_photo',
       photo: afterPhoto,
-      extraFields: {'completion_otp': completionOtp},
+      extraFileField: customerSignature != null ? 'customer_signature' : null,
+      extraFile: customerSignature,
+      extraFields: {
+        'completion_otp': completionOtp,
+        if (workDescription != null && workDescription.isNotEmpty) 'work_description': workDescription,
+        if (partsUsed != null && partsUsed.isNotEmpty) 'parts_used': partsUsed,
+        if (additionalCharges != null) 'additional_charges': additionalCharges.toString(),
+        if (technicianRemarks != null && technicianRemarks.isNotEmpty) 'technician_remarks': technicianRemarks,
+      },
     );
   }
 
@@ -75,6 +100,8 @@ class JobsRepository {
     String action, {
     String? photoField,
     File? photo,
+    String? extraFileField,
+    File? extraFile,
     Map<String, String>? extraFields,
   }) async {
     final uri = Uri.parse('${KycBackendConfig.backendBaseUrl}/update-job-status.php');
@@ -82,9 +109,16 @@ class JobsRepository {
       ..fields['vendor_id'] = vendorId
       ..fields['booking_id'] = bookingId.toString()
       ..fields['action'] = action;
+    final authToken = SupabaseAuthRepository.currentToken;
+    if (authToken != null) {
+      request.headers['Authorization'] = 'Bearer $authToken';
+    }
     if (extraFields != null) request.fields.addAll(extraFields);
     if (photoField != null && photo != null) {
       request.files.add(await http.MultipartFile.fromPath(photoField, photo.path));
+    }
+    if (extraFileField != null && extraFile != null) {
+      request.files.add(await http.MultipartFile.fromPath(extraFileField, extraFile.path));
     }
 
     final streamedResponse = await request.send();
@@ -99,6 +133,7 @@ class JobsRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/get-vendor-earnings.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
     final data = _decode(response.body);
     if (response.statusCode != 200) {
@@ -110,7 +145,7 @@ class JobsRepository {
   Future<void> setOnlineStatus(String vendorId, bool isOnline) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/set-vendor-online-status.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({'vendor_id': vendorId, 'is_online': isOnline}),
     );
     final data = _decode(response.body);
@@ -122,7 +157,7 @@ class JobsRepository {
   Future<void> withdraw(String vendorId, double amount) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/withdraw-earnings.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({'vendor_id': vendorId, 'amount': amount}),
     );
     final data = _decode(response.body);

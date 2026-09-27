@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
 import '../models/job_models.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../repositories/auth_repository.dart';
 
 class _AppColors {
   static const brand = Color(0xFFFF9A4D);
@@ -33,46 +33,45 @@ class ActiveJobTrackingScreen extends StatefulWidget {
 }
 
 class _ActiveJobTrackingScreenState extends State<ActiveJobTrackingScreen> {
-  late Timer _locationTimer;
+  StreamSubscription<Position>? _positionSubscription;
   bool _isTracking = false;
   bool _isLoading = false;
   double? _currentLat;
   double? _currentLng;
   String _statusMessage = 'Ready to start sharing location';
 
-  @override
-  void initState() {
-    super.initState();
-    _locationTimer = Timer.periodic(const Duration(seconds: 5), (_) => _updateLocation());
-  }
+  // Battery optimization: a distance-filtered stream only wakes the GPS
+  // and sends an update when the vendor has actually moved ~15m, instead
+  // of polling getCurrentPosition() unconditionally every 5 seconds
+  // regardless of whether they moved at all.
+  static const _locationSettings = LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: 15,
+  );
 
-  Future<void> _updateLocation() async {
+  Future<void> _updateLocation(Position position) async {
     if (!_isTracking) return;
 
     try {
-      final position = await Geolocator.getCurrentPosition();
       setState(() {
         _currentLat = position.latitude;
         _currentLng = position.longitude;
       });
 
-      final prefs = await SharedPreferences.getInstance();
-      final vendorId = prefs.getInt('vendorId');
-
-      if (vendorId != null) {
-        await http.post(
-          Uri.parse('https://digitrixmedia.com/mahamaintainpro/api/vendor/update-vendor-location.php'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'request_id': widget.job.id,
-            'vendor_id': vendorId,
-            'latitude': position.latitude,
-            'longitude': position.longitude,
-            'speed': position.speed,
-            'accuracy': position.accuracy,
-          }),
-        ).timeout(const Duration(seconds: 5));
-      }
+      // vendor_id is no longer sent - the server derives it from this
+      // request's own JWT (update-vendor-location.php), so a spoofed
+      // vendor_id can no longer be used to fake another vendor's location.
+      await http.post(
+        Uri.parse('https://digitrixmedia.com/mahamaintainpro/api/vendor/update-vendor-location.php'),
+        headers: SupabaseAuthRepository.staticAuthHeaders,
+        body: jsonEncode({
+          'request_id': widget.job.id,
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'speed': position.speed,
+          'accuracy': position.accuracy,
+        }),
+      ).timeout(const Duration(seconds: 5));
     } catch (e) {
       // Silent fail
     }
@@ -101,6 +100,13 @@ class _ActiveJobTrackingScreenState extends State<ActiveJobTrackingScreen> {
         _currentLng = position.longitude;
         _statusMessage = 'Sharing location with customer...';
       });
+
+      // Tracking now only runs between _startTracking and _stopTracking -
+      // never before the job starts or after it ends/completes.
+      await _positionSubscription?.cancel();
+      _positionSubscription = Geolocator.getPositionStream(locationSettings: _locationSettings)
+          .listen(_updateLocation);
+      await _updateLocation(position);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
@@ -111,6 +117,8 @@ class _ActiveJobTrackingScreenState extends State<ActiveJobTrackingScreen> {
   }
 
   Future<void> _stopTracking() async {
+    await _positionSubscription?.cancel();
+    _positionSubscription = null;
     setState(() => _isTracking = false);
     _statusMessage = 'Location tracking stopped';
   }
@@ -122,7 +130,7 @@ class _ActiveJobTrackingScreenState extends State<ActiveJobTrackingScreen> {
 
   @override
   void dispose() {
-    _locationTimer.cancel();
+    _positionSubscription?.cancel();
     super.dispose();
   }
 

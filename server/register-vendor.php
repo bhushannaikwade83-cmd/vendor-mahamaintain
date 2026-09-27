@@ -10,6 +10,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRoleAllowUnregistered();
+
 // Database credentials - same digitrix_maha_maintain_pro database the
 // customer app and send-vendor-otp.php / verify-vendor-otp.php use.
 $servername = "localhost";
@@ -27,12 +30,13 @@ $conn->set_charset("utf8");
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $data = json_decode(file_get_contents("php://input"), true);
 
-    if (!isset($data['phone_number']) || !isset($data['name'])) {
+    if (!isset($data['name'])) {
         http_response_code(400);
-        die(json_encode(['success' => false, 'message' => 'Phone number and name are required']));
+        die(json_encode(['success' => false, 'message' => 'Name is required']));
     }
 
-    $phone_number = trim($data['phone_number']);
+    // phone_number from verified JWT, not client input
+    $phone_number = $vendorToken['phone_number'];
     $name = trim($data['name']);
     $email = isset($data['email']) ? trim($data['email']) : null;
 
@@ -58,11 +62,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $check_stmt->close();
 
     if ($existing) {
+        $token = generateJWT([
+            'phone_number' => $phone_number,
+            'role' => 'vendor',
+            'vendor_id' => (int) $existing['id'],
+        ]);
         http_response_code(200);
         echo json_encode([
             'success' => true,
             'message' => 'Vendor already registered',
             'vendor_id' => $existing['id'],
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => 86400,
         ]);
         $conn->close();
         exit();
@@ -81,11 +93,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $vendor_id = $conn->insert_id;
     $insert_stmt->close();
 
+    $token = generateJWT([
+        'phone_number' => $phone_number,
+        'role' => 'vendor',
+        'vendor_id' => (int) $vendor_id,
+    ]);
+
     http_response_code(200);
     echo json_encode([
         'success' => true,
         'message' => 'Registration submitted successfully. Awaiting admin approval.',
         'vendor_id' => $vendor_id,
+        'token' => $token,
+        'token_type' => 'Bearer',
+        'expires_in' => 86400,
     ]);
 
 } else if ($_SERVER['REQUEST_METHOD'] == 'GET') {

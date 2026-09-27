@@ -13,11 +13,22 @@ class BookingsTab extends StatefulWidget {
 
 class _BookingsTabState extends State<BookingsTab> {
   JobStatus? _filter;
+  bool _todayOnly = false;
+
+  bool _isToday(Job job) {
+    final date = DateTime.tryParse(job.time);
+    if (date == null) return false;
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
 
   @override
   Widget build(BuildContext context) {
     final allJobs = [...partnerAppState.newJobs, ...partnerAppState.jobs];
-    final filtered = _filter == null ? allJobs : allJobs.where((j) => j.status == _filter).toList();
+    var filtered = _filter == null ? allJobs : allJobs.where((j) => j.status == _filter).toList();
+    if (_todayOnly) {
+      filtered = filtered.where(_isToday).toList();
+    }
 
     return RefreshIndicator(
       onRefresh: () => partnerAppState.refreshJobs(),
@@ -33,6 +44,12 @@ class _BookingsTabState extends State<BookingsTab> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
+                FilterChip(
+                  label: const Text('Today'),
+                  selected: _todayOnly,
+                  onSelected: (selected) => setState(() => _todayOnly = selected),
+                ),
+                const SizedBox(width: 8),
                 _filterChip('All', null),
                 const SizedBox(width: 8),
                 _filterChip('New (${partnerAppState.newJobs.length})', JobStatus.newJob),

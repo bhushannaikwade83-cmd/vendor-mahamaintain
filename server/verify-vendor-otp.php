@@ -10,6 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+require_once __DIR__ . '/jwt-auth.php';
+
 // Database credentials
 $servername = "localhost";
 $username = "digitrix_maha_user";
@@ -97,6 +99,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     http_response_code(200);
     if ($vendor) {
+        $token = generateJWT([
+            'phone_number' => $phone_number,
+            'role' => 'vendor',
+            'vendor_id' => (int) $vendor['id'],
+        ]);
         echo json_encode([
             'success' => true,
             'message' => 'OTP verified successfully',
@@ -110,13 +117,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // onboarding before - lets the app skip straight to the
             // dashboard instead of re-running the onboarding checklist.
             'has_mpin' => $vendor['mpin_hash'] !== null,
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => 86400,
         ]);
     } else {
+        // No vendor row yet - issue a limited token (role=vendor, no
+        // vendor_id) that's only accepted by register-vendor.php via
+        // requireVendorRoleAllowUnregistered(), not by any job/earnings
+        // endpoint that needs a real vendor_id.
+        $token = generateJWT([
+            'phone_number' => $phone_number,
+            'role' => 'vendor',
+        ]);
         echo json_encode([
             'success' => true,
             'message' => 'OTP verified successfully',
             'exists' => false,
             'phone_number' => $phone_number,
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => 86400,
         ]);
     }
 

@@ -10,12 +10,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     json_response(['error' => 'POST required'], 405);
 }
 
-$input = json_decode((string)file_get_contents('php://input'), true);
-$vendorId = trim((string)($input['vendor_id'] ?? ''));
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
 
-if ($vendorId === '') {
-    json_response(['error' => 'vendor_id is required'], 400);
-}
+$input = json_decode((string)file_get_contents('php://input'), true);
 
 $state = bin2hex(random_bytes(24));
 $codeVerifier = bin2hex(random_bytes(32)); // PKCE: random code verifier

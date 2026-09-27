@@ -27,3 +27,4 @@ pubspec.lock
 *.log
 .env
 .env.local
+.jwt-secret.local

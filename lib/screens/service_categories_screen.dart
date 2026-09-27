@@ -160,6 +160,8 @@ class _ServiceCategoriesScreenState extends ConsumerState<ServiceCategoriesScree
                                                     width: 80,
                                                     height: 64,
                                                     fit: BoxFit.cover,
+                                                    cacheWidth: 160,
+                                                    cacheHeight: 128,
                                                     errorBuilder: (context, error, stackTrace) =>
                                                         _categoryImageFallback(),
                                                     loadingBuilder: (context, child, progress) {

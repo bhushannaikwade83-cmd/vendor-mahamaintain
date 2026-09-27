@@ -5,10 +5,9 @@ require __DIR__ . '/vendor_config.php';
 
 header('Content-Type: application/json');
 
-$vendorId = trim((string)($_GET['vendor_id'] ?? ''));
-if ($vendorId === '') {
-    json_response(['error' => 'vendor_id is required'], 400);
-}
+require_once __DIR__ . '/jwt-auth.php';
+$vendorToken = requireVendorRole();
+$vendorId = (string) $vendorToken['vendor_id'];
 
 $stmt = db()->prepare('SELECT category_id FROM vendor_service_categories WHERE vendor_id = :vendor_id');
 $stmt->execute(['vendor_id' => $vendorId]);

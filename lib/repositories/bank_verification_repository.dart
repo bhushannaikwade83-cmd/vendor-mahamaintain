@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/kyc_backend_config.dart';
 import '../models/bank_verification_model.dart';
+import 'auth_repository.dart';
 
 /// Talks to the PHP backend that holds the Razorpay key/secret and starts a
 /// Fund Account Validation (penny-drop) for a vendor's bank account. The
@@ -15,7 +16,7 @@ class BankVerificationRepository {
   }) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/bank_verify_start.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'account_holder_name': accountHolderName,
@@ -34,6 +35,7 @@ class BankVerificationRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/bank_verify_status.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
 
     final data = _decode(response.body);

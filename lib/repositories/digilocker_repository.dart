@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/kyc_backend_config.dart';
 import '../models/vendor_verification_model.dart';
+import 'auth_repository.dart';
 
 /// Talks to the PHP backend that owns the DigiLocker client secret and the
 /// MariaDB verification tables. The Flutter app never talks to DigiLocker
@@ -18,7 +19,7 @@ class DigiLockerRepository {
 
     final response = await http.post(
       Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({'vendor_id': vendorId}),
     );
 
@@ -43,6 +44,7 @@ class DigiLockerRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/verification_status.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
 
     debugPrint('🔵 [Repo] Response status: ${response.statusCode}');
@@ -73,6 +75,7 @@ class DigiLockerRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/get-digilocker-documents.php')
           .replace(queryParameters: queryParams),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
 
     final data = _decode(response.body);
@@ -91,7 +94,7 @@ class DigiLockerRepository {
   ) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/store-digilocker-documents.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'documents': documents,
@@ -113,7 +116,7 @@ class DigiLockerRepository {
   ) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/extract-aadhaar-details.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'aadhaar_data': aadhaarData,
@@ -135,7 +138,7 @@ class DigiLockerRepository {
   ) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/extract-pan-details.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'pan_data': panData,
@@ -164,7 +167,7 @@ class DigiLockerRepository {
   }) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/admin-verify-vendor.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'admin_id': adminId,
@@ -189,7 +192,7 @@ class DigiLockerRepository {
   }) async {
     final response = await http.post(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/admin-reject-vendor.php'),
-      headers: {'Content-Type': 'application/json'},
+      headers: SupabaseAuthRepository.staticAuthHeaders,
       body: jsonEncode({
         'vendor_id': vendorId,
         'admin_id': adminId,
@@ -218,6 +221,7 @@ class DigiLockerRepository {
         'limit': limit.toString(),
         'offset': offset.toString(),
       }),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
 
     final data = _decode(response.body);

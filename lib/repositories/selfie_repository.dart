@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../config/kyc_backend_config.dart';
 import '../models/selfie_verification_model.dart';
+import 'auth_repository.dart';
 
 class SelfieRepository {
   Future<void> uploadSelfie(String vendorId, XFile selfie) async {
@@ -14,6 +15,10 @@ class SelfieRepository {
         await selfie.readAsBytes(),
         filename: selfie.name,
       ));
+    final authToken = SupabaseAuthRepository.currentToken;
+    if (authToken != null) {
+      request.headers['Authorization'] = 'Bearer $authToken';
+    }
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
@@ -28,6 +33,7 @@ class SelfieRepository {
     final response = await http.get(
       Uri.parse('${KycBackendConfig.backendBaseUrl}/selfie_status.php')
           .replace(queryParameters: {'vendor_id': vendorId}),
+      headers: SupabaseAuthRepository.staticAuthHeaders,
     );
 
     final data = _decode(response.body);
