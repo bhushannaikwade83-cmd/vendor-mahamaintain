@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../main.dart' show authRepositoryProvider;
 import '../repositories/service_category_repository.dart';
 import '../state/partner_app_state.dart';
+import 'shop_pincodes_screen.dart';
 
 class ProfileTab extends ConsumerStatefulWidget {
   const ProfileTab({Key? key}) : super(key: key);
@@ -166,6 +167,11 @@ class _ProfileTabState extends ConsumerState<ProfileTab> {
                     )),
                 _divider(),
                 _menuItem('📄', 'Documents & Verification', () => context.push('/verification')),
+                _divider(),
+                _menuItem('📍', 'My Shop Pincodes', () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ShopPincodesScreen()),
+                )),
               ],
             ),
           ),
