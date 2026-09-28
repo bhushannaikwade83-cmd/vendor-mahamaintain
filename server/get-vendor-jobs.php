@@ -19,7 +19,9 @@ $vendorRow = $onlineStmt->fetch();
 $isOnline = $vendorRow ? (bool)$vendorRow['is_online'] : true;
 
 // "New" jobs: broadcast (unclaimed) bookings in a category this vendor
-// services, that they haven't already rejected.
+// services AND in a pincode this vendor operates in, that they haven't
+// already rejected. Pincodes are extracted from the order address and
+// vendor_pincodes table governs which pincodes a vendor is registered to serve.
 if ($isOnline) {
     $newJobsStmt = db()->prepare(
         'SELECT b.*, sc.name AS category_name FROM bookings b
@@ -29,12 +31,15 @@ if ($isOnline) {
            AND b.category_id IN (
                SELECT category_id FROM vendor_service_categories WHERE vendor_id = :vendor_id
            )
+           AND COALESCE(b.pincode, "") IN (
+               SELECT pincode FROM vendor_pincodes WHERE vendor_id = :vendor_id2
+           )
            AND b.id NOT IN (
-               SELECT booking_id FROM booking_rejections WHERE vendor_id = :vendor_id2
+               SELECT booking_id FROM booking_rejections WHERE vendor_id = :vendor_id3
            )
          ORDER BY b.created_at DESC'
     );
-    $newJobsStmt->execute(['vendor_id' => $vendorId, 'vendor_id2' => $vendorId]);
+    $newJobsStmt->execute(['vendor_id' => $vendorId, 'vendor_id2' => $vendorId, 'vendor_id3' => $vendorId]);
     $newJobs = $newJobsStmt->fetchAll();
 } else {
     $newJobs = [];

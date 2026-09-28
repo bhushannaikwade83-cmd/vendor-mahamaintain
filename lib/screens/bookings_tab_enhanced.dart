@@ -449,7 +449,7 @@ class _SlotJobCard extends StatelessWidget {
               children: [
                 Text('₹${job.amount}',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _AppColors.ink)),
-                if (job.status == JobStatus.assigned)
+                if (job.status == JobStatus.accepted)
                   ElevatedButton(
                     onPressed: onTap,
                     style: ElevatedButton.styleFrom(
@@ -470,7 +470,7 @@ class _SlotJobCard extends StatelessWidget {
 
   Widget _slotStatusBadge() {
     final (color, text) = switch (job.status) {
-      JobStatus.assigned => (_AppColors.success, 'READY'),
+      JobStatus.accepted => (_AppColors.success, 'READY'),
       JobStatus.inProgress => (_AppColors.brand, 'IN PROGRESS'),
       JobStatus.completed => (_AppColors.success, 'DONE'),
       _ => (_AppColors.line, 'PENDING'),
