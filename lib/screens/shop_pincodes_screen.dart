@@ -16,7 +16,7 @@ class _ShopPincodesScreenState extends State<ShopPincodesScreen> {
   bool _isLoading = true;
   String? _error;
 
-  static const String API_BASE = 'https://digitrixmedia.com/mahamaintainpro/api/vendor';
+  static const String API_BASE = 'https://digitrixmedia.com/mahamaintainpro/api';
 
   @override
   void initState() {
