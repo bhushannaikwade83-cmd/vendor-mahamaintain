@@ -32,6 +32,14 @@ class _ShopPincodesScreenState extends State<ShopPincodesScreen> {
 
     try {
       final token = SupabaseAuthRepository.currentToken;
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _error = 'Not logged in. Please log in to access pincodes.';
+          _isLoading = false;
+        });
+        return;
+      }
+
       final response = await http.get(
         Uri.parse('$API_BASE/get-vendor-pincodes.php'),
         headers: {'Authorization': 'Bearer $token'},
@@ -68,6 +76,13 @@ class _ShopPincodesScreenState extends State<ShopPincodesScreen> {
 
     try {
       final token = SupabaseAuthRepository.currentToken;
+      if (token == null || token.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not logged in. Please log in first.')),
+        );
+        return;
+      }
+
       final response = await http.post(
         Uri.parse('$API_BASE/add-vendor-pincode.php'),
         headers: {
@@ -101,6 +116,13 @@ class _ShopPincodesScreenState extends State<ShopPincodesScreen> {
   Future<void> _deletePincode(int id) async {
     try {
       final token = SupabaseAuthRepository.currentToken;
+      if (token == null || token.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not logged in. Please log in first.')),
+        );
+        return;
+      }
+
       final response = await http.post(
         Uri.parse('$API_BASE/delete-vendor-pincode.php'),
         headers: {
