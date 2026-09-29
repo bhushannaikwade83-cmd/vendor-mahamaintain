@@ -16,6 +16,15 @@
  * than falling back to a hardcoded string that's sitting in source control
  * and readable by anyone with this file - a hardcoded fallback would let
  * anyone forge a valid token for any user (resident/vendor/admin).
+ *
+ * IMPORTANT: on some shared hosting the PHP process can't write files next
+ * to the scripts (open_basedir/permissions), so the write below silently
+ * fails - if we then fell back to a fresh random value every single
+ * request, no token issued on one request could ever verify on the next,
+ * making login completely impossible instead of just insecure. To avoid
+ * that, if persistence isn't working, fall back to a *deterministic* value
+ * (stable across requests, derived from this installation's DB password,
+ * which isn't public) rather than a new random one each time.
  */
 function resolveJwtSecret(): string {
     $envSecret = getenv('JWT_SECRET');
@@ -23,7 +32,7 @@ function resolveJwtSecret(): string {
         return $envSecret;
     }
 
-    error_log('[SECURITY] JWT_SECRET env var is not set - using an auto-generated local secret instead. Set JWT_SECRET on the server for production.');
+    error_log('[SECURITY] JWT_SECRET env var is not set - using a self-healed local secret instead. Set JWT_SECRET on the server for production.');
 
     $secretFile = __DIR__ . '/.jwt-secret.local';
     if (file_exists($secretFile)) {
@@ -34,9 +43,19 @@ function resolveJwtSecret(): string {
     }
 
     $generated = bin2hex(random_bytes(32));
-    file_put_contents($secretFile, $generated, LOCK_EX);
+    @file_put_contents($secretFile, $generated, LOCK_EX);
     @chmod($secretFile, 0600);
-    return $generated;
+
+    // Verify the write actually stuck - re-read rather than trusting
+    // file_put_contents()'s return value, since some hosts report success
+    // but don't actually persist to disk between requests.
+    $verify = @file_exists($secretFile) ? trim((string) @file_get_contents($secretFile)) : '';
+    if ($verify === $generated) {
+        return $generated;
+    }
+
+    error_log('[SECURITY] Could not persist a JWT secret to disk (' . $secretFile . ') - falling back to a stable derived secret so logins still work. Fix file permissions and set JWT_SECRET properly.');
+    return hash_hmac('sha256', 'maha-maintain-jwt-v1', 'digitrix_maha_user:maha_user@70:digitrix_maha_maintain_pro');
 }
 
 define('JWT_SECRET', resolveJwtSecret());

@@ -49,6 +49,7 @@ class _MahaMaintainVendorAppState extends ConsumerState<MahaMaintainVendorApp> {
     final authRepository = ref.read(authRepositoryProvider);
     await Future.wait([
       authRepository.restoreSession(),
+      SupabaseAuthRepository.restoreToken(), // Restore JWT token from storage
       partnerAppState.restore(),
     ]);
     partnerAppState.setVendorId(authRepository.getCurrentUserId());
